@@ -1,0 +1,61 @@
+Logons:
+Interactive (Logon type 2): This type of logon happens when a user logs on to the computer physically.
+Network (Logon type 3): This type of logon occurs when a user or computer logs on to the computer from the network.
+Batch (Logon type 4): This type of logon is used by batch servers. Scheduled tasks are executed on behalf of a user without human intervention.
+Services (Logon type 5): This type of logon is used for services and service accounts that logon to run a service.
+RemoteInteractive (Logon type 10): This logon type occurs when a user remotely accesses the computer through RDP applications such as Remote Desktop, Remote Assistance or Terminal Services.
+
+4624 sucessful logon 
+4625 Failed logons 
+
+1149 Applications and Services logs --> Terminalservices-RemoteConnectionManager //sucessful RDP
+261 Applications and Services logs --> Terminalservices-RemoteConnectionManager //Failed RDP
+1102 Applications and Services logs --> TerminalServices-ClientActiveXcore // Event ID 1102 will give us the events which store the destination IP Address of the server running RDP 
+
+
+Windows scheduled tasks
+In Security logs
+
+Event ID 4698: Task created. Shows task name, scheduled time and command to execute.
+Event ID 4699: Task deleted. Shows task name and time when deleted.
+Event ID 4702: Task updated. Shows task name, scheduled time and command to execute.
+For TaskScheduler logs under “Application and Services”
+
+Event ID 106: Task created/registered shows task name.
+Event ID 140: Task updated.
+Event ID 141: Task deleted.
+Event ID 201: Task action completed and command executed.
+
+
+Services:
+Creation --> system --> 7045
+
+
+Account Management
+Event ID 4720 : New User Account Created
+Event ID 4732 : User Account added to a localgroup
+
+
+Event Log Manipulation
+Event ID 1102: Security log cleared in the security log
+Event ID 104: Any log cleared in the system log
+Event ID 1100: Disabling Event Logging in the security log
+
+Firewall:
+Application And Service Logs under Microsoft->Windows->Windows Firewall 2004
+Event ID 2004: A new rule was added to the exception list.
+Event ID 2005: A rule was modified from the exception list.
+Event ID 2003: Firewall was disabled.
+
+Windows Defender Event Logs
+Application And Service Logs under Microsoft->Windows->Windows Defender
+Event ID 1116: Malware or suspicious files detected.
+Event ID 1117: Action taken against Malware or suspicious file.
+Event ID 5001: Real Time Protection disabled.
+Event ID 5007: File/Folder Excluded.
+
+Powershell Command Execution Event logs
+Application And Service Logs under Microsoft->Windows --> PowerShell->Operational.
+Event ID 4104 : Command Execution in PowerShell log.
+
+
