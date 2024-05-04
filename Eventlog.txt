@@ -7,6 +7,7 @@ RemoteInteractive (Logon type 10): This logon type occurs when a user remotely a
 
 4624 sucessful logon 
 4625 Failed logons 
+4648 --> logon with explicit credentials
 
 1149 Applications and Services logs --> Terminalservices-RemoteConnectionManager //sucessful RDP
 261 Applications and Services logs --> Terminalservices-RemoteConnectionManager //Failed RDP
