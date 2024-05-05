@@ -1,3 +1,5 @@
+Refer This: https://medium.com/@Manasi_Joshi/dissecting-malware-2911f9d1a118
+
 PE File Structure:
 ├── DOS Header
 │   ├── e_magic: Signature ("MZ") indicating an MS-DOS executable                       IMP
@@ -225,3 +227,4 @@ _________________________________________________API_BY_Action__________________
     - Net Functions*: Various network-related functions.
 Remember that these are just a few examples, and there are many more Windows API functions available for different purposes. If you'd like more detailed information, you can refer to the https://github.com/7etsuo/windows-api-function-cheatsheets  on GitHub. 
 
+Common Packers used by malwares: upx, zlib, deflate
