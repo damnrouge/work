@@ -100,7 +100,7 @@ Here are the details to look for in Event ID 4769 to spot a potential Kerberoast
 
 SOC analysts should also consider setting up alerts for multiple service ticket requests within a short time frame, especially if they are for different services. This could indicate an attacker is trying to request multiple service tickets for offline cracking.
 
-Additionally, implementing account lockout policies, monitoring for unusual login times, and analyzing login locations can help in detecting potential attacks. Regularly reviewing and updating service account passwords with complex, hard-to-crack passwords will also reduce the risk of successful Kerberoasting attacks¹²³⁴. If you need further assistance or have more questions, feel free to ask!
+Additionally, implementing account lockout policies, monitoring for unusual login times, and analyzing login locations can help in detecting potential attacks. Regularly reviewing and updating service account passwords with complex, hard-to-crack passwords will also reduce the risk of successful Kerberoasting attack. If you need further assistance or have more questions, feel free to ask!
 
 _____________________________________________________________________________________________________________________________________________________________________________________________________________
 
@@ -159,11 +159,6 @@ SOC analysts should also:
 - **Least Privilege**: Implement a least-privilege model to restrict user and domain administrator access.
 - **Kerberos Configuration**: Use AES encryption for Kerberos where possible and enable Privilege Attribute Certificate (PAC) validation⁴.
 
-By understanding the mechanics of a Silver Ticket attack and implementing robust detection and prevention strategies, organizations can better protect their Active Directory environments from this type of threat. If you need further details or assistance, feel free to ask!
-
-
-(1) What is a Silver Ticket Attack? – CrowdStrike. https://www.crowdstrike.com/cybersecurity-101/attack-types/silver-ticket-attack/.
-
 _____________________________________________________________________________________________________________________________________________________________________________________________________________
 
 
@@ -215,16 +210,6 @@ To mitigate the risk of a Golden Ticket attack, organizations should:
 - Implement strict access controls and monitor administrative accounts for unusual activity.
 - Use advanced threat detection systems that can identify irregular patterns in Kerberos ticket usage¹².
 
-By understanding the detailed process of a Golden Ticket attack, organizations can better prepare their defenses and respond more effectively to this type of advanced cyber threat. If you need further information or assistance, feel free to ask!
-
-Source: Conversation with Bing, 5/6/2024
-(1) What is a Golden Ticket Attack? - CrowdStrike. https://www.crowdstrike.com/cybersecurity-101/golden-ticket-attack/.
-(2) Complete Domain Compromise with a Golden Ticket Attack - Netwrix. https://blog.netwrix.com/2022/08/31/complete-domain-compromise-with-golden-tickets/.
-(3) What Is a Golden Ticket Attack? Stop Hackers From Having Complete ... - MUO. https://www.makeuseof.com/what-is-a-golden-ticket-attack/.
-(4) Golden ticket attack definition - Glossary | NordVPN. https://nordvpn.com/cybersecurity/glossary/golden-ticket-attack/.
-(5) Golden Ticket attacks explained - The Quest Blog. https://blog.quest.com/golden-ticket-attacks-how-they-work-and-how-to-defend-against-them/.
-(6) Golden Ticket Attack Explained - MITRE ATT&CK T1558.001. https://www.picussecurity.com/resource/blog/golden-ticket-attack-mitre-t1558.001.
-(7) Golden Ticket Attacks: How to Detect - infrasos.com. https://infrasos.com/golden-ticket-attacks-how-to-detect/.
 
 #### Detection and SOC Analysis
 SOC analysts can detect Golden Ticket attacks by monitoring specific event IDs in the Windows Event Log:
@@ -237,18 +222,6 @@ Analysts should also look for:
 - **Irregular Access Patterns**: Access to resources that do not align with the normal behavior of the user or service account.
 - **Encryption Key Types**: Verify that the encryption key type used on a Kerberos ticket does not utilize the insecure RC4 algorithm, which could indicate a Golden Ticket attack⁹.
 
-By understanding the mechanics of a Golden Ticket attack and implementing robust detection strategies, organizations can better protect their Active Directory environments from this type of threat. If you need more information or assistance, feel free to ask!
 
-Source: Conversation with Bing, 5/6/2024
-(1) What is a Golden Ticket Attack? - CrowdStrike. https://www.crowdstrike.com/cybersecurity-101/golden-ticket-attack/.
-(2) Detecting Active Directory Kerberos Attacks: Threat Research ... - Splunk. https://www.splunk.com/en_us/blog/security/detecting-active-directory-kerberos-attacks-threat-research-release-march-2022.html.
-(3) Detecting and Preventing a Golden Ticket Attack. https://www.socinvestigation.com/detecting-and-preventing-a-golden-ticket-attack/.
-(4) Detecting Golden Ticket Attacks: Master in just 6 Steps. https://blueteamresources.in/detecting-golden-ticket-attack/.
-(5) Golden Ticket attacks explained - The Quest Blog. https://blog.quest.com/golden-ticket-attacks-how-they-work-and-how-to-defend-against-them/.
-(6) Golden ticket attack definition - Glossary | NordVPN. https://nordvpn.com/cybersecurity/glossary/golden-ticket-attack/.
-(7) What is a Golden Ticket? | Security Encyclopedia - HYPR Corp. https://www.hypr.com/security-encyclopedia/golden-ticket.
-(8) Detecting Forged Kerberos Ticket (Golden Ticket & Silver Ticket) Use in .... https://adsecurity.org/?p=1515.
-(9) How to Detect a Kerberos Golden Ticket Attack - SentinelOne. https://www.sentinelone.com/blog/mitigation-strategy-kerberos-golden-ticket-attack/.
-(10) Golden Ticket attack: Detection and mitigation | AD Kerberos attack. https://www.manageengine.com/log-management/cyber-security/golden-ticket-attack.html.
-(11) Golden Ticket Attack - Netwrix. https://www.netwrix.com/how_golden_ticket_attack_works.html.
+
 
