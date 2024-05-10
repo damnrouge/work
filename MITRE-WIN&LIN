@@ -1,0 +1,220 @@
+Windows MITRE ATT&CK Framework:
+
+#Tactic: Initial Access
+Definition: Techniques that enable adversaries to gain entry into a network.
+- Techniques & Examples:
+  - Drive-by Compromise: User visits a malicious site that exploits a browser vulnerability.
+  - Phishing: Deceptive emails trick users into revealing credentials.
+  - Valid Accounts: Stolen credentials are used to access systems.
+  - Exploit Public-Facing Application: Vulnerabilities in web applications are targeted.
+  - Supply Chain Compromise: Third-party software updates are manipulated.
+
+#Tactic: Execution
+Definition: Techniques that result in adversary-controlled code running on a system.
+- Techniques & Examples:
+  - Command and Scripting Interpreter: PowerShell scripts execute commands.
+  - User Execution: Users are tricked into running malicious code.
+  - Scheduled Task: Tasks are scheduled to execute malware.
+  - Service Execution: Malicious services are run on the system.
+  - Exploitation for Client Execution: Client software vulnerabilities are exploited.
+
+#Tactic: Persistence
+Definition: Techniques adversaries use to maintain their foothold.
+- Techniques & Examples:
+  - Boot or Logon Autostart Execution: Malware runs at system startup.
+  - Create Account: New accounts are created for access.
+  - Modify Existing Service: Services are altered to run malware.
+  - Scheduled Task: Malware is scheduled to run periodically.
+  - Server Software Component: Server components are modified for persistence.
+
+#Tactic: Privilege Escalation
+Definition: Techniques used to gain higher-level permissions.
+- Techniques & Examples:
+  - Exploitation for Privilege Escalation: System vulnerabilities are exploited.
+  - Valid Accounts: Legitimate credentials are used for higher access.
+  - Access Token Manipulation: Tokens are manipulated to elevate privileges.
+  - Create or Modify System Process: System processes are altered or created.
+  - Bypass User Account Control: UAC is bypassed to elevate privileges.
+
+#Tactic: Defense Evasion
+Definition: Techniques that adversaries use to avoid detection.
+- Techniques & Examples:
+  - Obfuscated Files or Information: Artifacts are hidden.
+  - Deception: Decoys mislead defenders.
+  - Modify Registry: Registry values are changed to disable security features.
+  - Rootkit: Rootkits conceal the presence of malware.
+  - Impair Defenses: Security tools are disabled.
+
+#Tactic: Credential Access
+Definition: Techniques used to steal credentials.
+- Techniques & Examples:
+  - Credential Dumping: Credentials are extracted from the system.
+  - Input Capture: Keystrokes are logged to capture credentials.
+  - Steal Web Session Cookie: Cookies are stolen to hijack sessions.
+  - Brute Force: Automated guessing of passwords.
+  - Man-in-the-Middle: Network traffic is intercepted to capture credentials.
+
+#Tactic: Discovery
+Definition: Techniques used to gain knowledge about the system.
+- Techniques & Examples:
+  - System Owner/User Discovery: Identifying users or system owners.
+  - System Information Discovery: Gathering system information.
+  - Network Service Scanning: Scanning for network services.
+  - Remote System Discovery: Identifying remote systems.
+  - Permission Groups Discovery: Finding permission group memberships.
+
+#Tactic: Lateral Movement
+Definition: Techniques used to move through a network.
+- Techniques & Examples:
+  - Pass the Hash: Stolen hash values are used to authenticate.
+  - Remote Services: Services like RDP are used to move laterally.
+  - Replication Through Removable Media: Malware spreads via USB drives.
+  - Taint Shared Content: Shared content is compromised to move laterally.
+  - Use of Network Logon Scripts: Scripts are used to move to other systems.
+
+#Tactic: Collection
+Definition: Techniques used to gather data of interest.
+- Techniques & Examples:
+  - Data from Local System: Data is collected from local system sources.
+  - Data from Network Shared Drive: Data is collected from network drives.
+  - Data from Removable Media: Data is collected from USBs and other media.
+  - Email Collection: Emails are gathered from the target.
+  - Screen Capture: Screenshots are taken to collect information.
+
+#Tactic: Command and Control
+Definition: Techniques that establish communication with compromised systems.
+- Techniques & Examples:
+  - Commonly Used Port: Standard ports are used for C2 traffic.
+  - Communication Through Removable Media: USB drives are used for C2.
+  - Multilayer Encryption: Multiple layers of encryption protect C2 traffic.
+  - Web Service: Web services like Twitter are used for C2.
+  - Uncommonly Used Port: Non-standard ports are used for C2 traffic.
+
+#Tactic: Exfiltration
+Definition: Techniques used to steal data.
+- Techniques & Examples:
+  - Data Encrypted: Data is encrypted before exfiltration.
+  - Exfiltration Over Alternative Protocol: Protocols like DNS are used for exfiltration.
+  - Exfiltration Over Command and Control Channel: C2 channels are used to exfiltrate data.
+  - Automated Exfiltration: Data is automatically exfiltrated.
+  - Exfiltration Over Physical Medium: Data is moved out via physical means.
+
+#Tactic: Impact
+Definition: Techniques used to disrupt, destroy, or manipulate systems.
+- Techniques & Examples:
+  - Data Destruction: Data is deleted or otherwise destroyed.
+  - Data Encrypted for Impact: Data is encrypted to deny access (ransomware).
+  - Defacement: Websites are defaced.
+  - Disk Wipe: Disks are wiped to destroy data.
+  - Service Stop: Services are stopped to disrupt operations.
+---------------------------------------------------------------------------------------------------------------------------------------------
+Linux MITRE ATT&CK Framework:
+
+Tactic: Initial Access
+Definition: Techniques that enable adversaries to gain entry into a network.
+- Techniques & Examples:
+  - Drive-by Compromise: User visits a malicious site that exploits a browser vulnerability.
+  - Phishing: Deceptive emails trick users into revealing credentials.
+  - Valid Accounts: Stolen credentials are used to access systems.
+  - Exploit Public-Facing Application: Vulnerabilities in web applications are targeted.
+  - Supply Chain Compromise: Third-party software updates are manipulated.
+
+Tactic: Execution
+Definition: Techniques that result in adversary-controlled code running on a system.
+- Techniques & Examples:
+  - Command and Scripting Interpreter: Bash scripts execute commands.
+  - User Execution: Users are tricked into running malicious code.
+  - Scheduled Task/Job: Tasks are scheduled to execute malware.
+  - Service Execution: Malicious services are run on the system.
+  - Exploitation for Client Execution: Client software vulnerabilities are exploited.
+
+Tactic: Persistence
+Definition: Techniques adversaries use to maintain their foothold.
+- Techniques & Examples:
+  - Boot or Logon Autostart Execution: Malware runs at system startup.
+  - Create Account: New accounts are created for access.
+  - Modify Existing Service: Services are altered to run malware.
+  - Scheduled Task/Job: Malware is scheduled to run periodically.
+  - Server Software Component: Server components are modified for persistence.
+
+Tactic: Privilege Escalation
+Definition: Techniques used to gain higher-level permissions.
+- Techniques & Examples:
+  - Exploitation for Privilege Escalation: System vulnerabilities are exploited.
+  - Valid Accounts: Legitimate credentials are used for higher access.
+  - Access Token Manipulation: Tokens are manipulated to elevate privileges.
+  - Create or Modify System Process: System processes are altered or created.
+  - Bypass User Account Control: UAC mechanisms are exploited to execute payloads with elevated privileges.
+
+Tactic: Defense Evasion
+Definition: Techniques that adversaries use to avoid detection.
+- Techniques & Examples:
+  - Obfuscated Files or Information: Artifacts are hidden.
+  - Deception: Decoys mislead defenders.
+  - Modify Registry: Registry values are changed to disable security features.
+  - Rootkit: Rootkits conceal the presence of malware.
+  - Impair Defenses: Security tools are disabled.
+
+Tactic: Credential Access
+Definition: Techniques used to steal credentials.
+- Techniques & Examples:
+  - Credential Dumping: Credentials are extracted from the system.
+  - Input Capture: Keystrokes are logged to capture credentials.
+  - Steal Web Session Cookie: Cookies are stolen to hijack sessions.
+  - Brute Force: Automated guessing of passwords.
+  - Man-in-the-Middle: Network traffic is intercepted to capture credentials.
+
+Tactic: Discovery
+Definition: Techniques used to gain knowledge about the system.
+- Techniques & Examples:
+  - System Owner/User Discovery: Identifying users or system owners.
+  - System Information Discovery: Gathering system information.
+  - Network Service Scanning: Scanning for network services.
+  - Remote System Discovery: Identifying remote systems.
+  - Permission Groups Discovery: Finding permission group memberships.
+
+Tactic: Lateral Movement
+Definition: Techniques used to move through a network.
+- Techniques & Examples:
+  - Pass the Hash: Stolen hash values are used to authenticate.
+  - Remote Services: Services like SSH are used to move laterally.
+  - Replication Through Removable Media: Malware spreads via USB drives.
+  - Taint Shared Content: Shared content is compromised to move laterally.
+  - Use of Network Logon Scripts: Scripts are used to move to other systems.
+
+Tactic: Collection
+Definition: Techniques used to gather data of interest.
+- Techniques & Examples:
+  - Data from Local System: Data is collected from local system sources.
+  - Data from Network Shared Drive: Data is collected from network drives.
+  - Data from Removable Media: Data is collected from USBs and other media.
+  - Email Collection: Emails are gathered from the target.
+  - Screen Capture: Screenshots are taken to collect information.
+
+Tactic: Command and Control
+Definition: Techniques that establish communication with compromised systems.
+- Techniques & Examples:
+  - Commonly Used Port: Standard ports are used for C2 traffic.
+  - Communication Through Removable Media: USB drives are used for C2.
+  - Multilayer Encryption: Multiple layers of encryption protect C2 traffic.
+  - Web Service: Web services like Twitter are used for C2.
+  - Uncommonly Used Port: Non-standard ports are used for C2 traffic.
+
+Tactic: Exfiltration
+Definition: Techniques used to steal data.
+- Techniques & Examples:
+  - Data Encrypted: Data is encrypted before exfiltration.
+  - Exfiltration Over Alternative Protocol: Protocols like DNS are used for exfiltration.
+  - Exfiltration Over Command and Control Channel: C2 channels are used to exfiltrate data.
+  - Automated Exfiltration: Data is automatically exfiltrated.
+  - Exfiltration Over Physical Medium: Data is moved out via physical means.
+
+Tactic: Impact
+Definition: Techniques used to disrupt, destroy, or manipulate systems.
+- Techniques & Examples:
+  - Data Destruction: Data is deleted or otherwise destroyed.
+  - Data Encrypted for Impact: Data is encrypted to deny access (ransomware).
+  - Defacement: Websites are defaced.
+  - Disk Wipe: Disks are wiped to destroy data.
+  - Service Stop: Services are stopped to disrupt operations.
+
