@@ -1,0 +1,30 @@
+TLS Handshake (Step-by-Step Flow):
+
+1. Client Hello:
+   - The client initiates the handshake by sending a "hello" message to the server.
+   - The message includes:
+     - Supported TLS versions.
+     - Cipher suites (encryption algorithms) it can work with.
+     - A random string called the "client random."
+
+2. Server Hello:
+   - In response to the client hello, the server selects the best TLS version and cipher suite.
+   - The server sends:
+     - Its SSL certificate (including the public key).
+     - Another random string called the "server random."
+
+3. Server Certificate:
+   - The server's certificate is sent to the client for authentication.
+   - The client verifies the certificate's authenticity.
+
+4. Client Key Exchange:
+   - The client generates a "pre-master key" for symmetric encryption.
+   - The pre-master key is encrypted with the server's public key and sent back to the server.
+
+5. Change Cipher Spec:
+   - Both sides use their private keys to decrypt the pre-master key.
+   - They generate a shared secret (session key) for further communication.
+
+6. Finished:
+   - Both parties send an encrypted "finished" message to confirm successful key exchange.
+   - All data exchanged between client and server is now encrypted using the shared session key.
