@@ -33,14 +33,8 @@ Anti debugging:
 |                      | debugger presence.                        | assumes being debugged and stops executing.     |
 +----------------------+-------------------------------------------+--------------------------------------------------+
 
-
-
-
-These techniques are designed to make it difficult for analysts to study the malware's behavior by using the operating system's own mechanisms against the tools used for analysis. Each technique serves as a layer of defense, complicating the debugging process and requiring more sophisticated approaches to malware analysis.
 ________________________________________________________________________________________________________________________________________________________________________________________________
 Anti Snadboxing:
-Anti-sandboxing techniques are strategies used by malware to avoid detection and analysis in a sandboxed environment. Here are some common anti-sandboxing techniques along with example scenarios:
-
 +-----------------------+--------------------------------------+-------------------------------------------+
 | Technique             | Definition                           | Example Scenario                          |
 +-----------------------+--------------------------------------+-------------------------------------------+
@@ -96,7 +90,7 @@ Anti-sandboxing techniques are strategies used by malware to avoid detection and
 +-----------------------+--------------------------------------+-------------------------------------------+
 
 ______________________________________________________________________________________________________________________________________________________________________________________________
-
+Anti Snadboxing for urls: 
 +----------------------+--------------------------------------+-------------------------------------------+
 | Technique            | Definition                           | Example Scenario                          |
 +----------------------+--------------------------------------+-------------------------------------------+
@@ -131,7 +125,4 @@ ________________________________________________________________________________
 | Time Bomb            | Activates after a set date/time.     | Sets future activation date to remain     |
 |                      |                                      | dormant during analysis timeframe.        |
 +----------------------+--------------------------------------+-------------------------------------------+
-
-
-This table provides a structured overview of the techniques, making it easier to understand and compare them.
 
