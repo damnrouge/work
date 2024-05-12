@@ -1,4 +1,18 @@
 Logons:
++------+-----------------------+---------------+--------------------------------------------------+
+| Type | Logon Name            | Creds in mem? | Description                                      |
++------+-----------------------+---------------+--------------------------------------------------+
+| 2    | Interactive Logon     |  +             | User logged on locally at the console            |
+| 3    | Network Logon         |  -             | This logon happens when you're accessing file... |
+| 4    | Batch Logon           |  -             | Logon during scheduled task execution            |
+| 5    | Service Logon         |  +             | This is used for services and service accounts...|
+| 7    | Unlock                | -              | This is used whenever users unlock their machines|
+| 8    |-Network Cleartext     | -              |-Logon with credentials sent in the clear text... |
+| 9    |-New Credentials Logon-| +              |-A caller its current token and specified new...- |
+| 10   |Remote Interactive     | +              |-A user logged on to this computer remotely...--- |
+|11    |-Cached Interactive----| +              |-A user logged on to this computer with network.. |
++------+-----------------------+---------------+--------------------------------------------------+
+
 Interactive (Logon type 2): This type of logon happens when a user logs on to the computer physically.
 Network (Logon type 3): This type of logon occurs when a user or computer logs on to the computer from the network.
 Batch (Logon type 4): This type of logon is used by batch servers. Scheduled tasks are executed on behalf of a user without human intervention.
