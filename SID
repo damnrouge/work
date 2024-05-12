@@ -1,0 +1,18 @@
++----------------------+--------------------------------------+------------------------------------------------+
+| SID                  | Name                                 | Description                                    |
++----------------------+--------------------------------------+------------------------------------------------+
+| S-1-0-0              | Nobody                               | Used when the SID is unknown                   |
+| S-1-1-0              | Everyone                             | Includes all users except anonymous users      |
+| S-1-2-0              | Local                                | Includes users who have logged on locally      |
+| S-1-5-11             | Authenticated Users                  | Includes users authenticated upon login        |
+| S-1-5-18             | Local System Account                 | Used by services                               |
+| S-1-5–19             | Local Service Account                | Used by services                               |
+| S–1–5–20             | Network Service Account              | Used by services                               |
+| S–1–5–113            | LOCAL_ACCOUNT                        | Any local account                              |
+| S–1–5–114            | LOCAL_ACCOUNT_AND_MEMBER_OF_ADMIN... | Local accounts in Administrators group         |
+| S–1–5–32­544          | Administrators                       | Built-in Administrators group                  |
+| S­­­­­­­­­­ –1–5– 32 –555      | Remote Desktop Users                 | Granted the right to log on via RDP            |
+| S – 21 – domain id -500 | Administrator                     | Built-in Administrator account                 |
+| S -21-domain id -519 | Enterprise Admins                    | Built-in Domain Enterprise Admins Group        |
+| S -21-domain id -512 | Domain Admins                        | Built-in Domain Admins group                   |
++----------------------+--------------------------------------+------------------------------------------------+
