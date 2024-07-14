@@ -1,5 +1,37 @@
 
+The "Scattered Spider" refers to a cyberattack strategy involving multiple phases, each designed to compromise, control, and exploit targeted systems. Below are the typical phases of such an attack:
 
- Based on my observations, Sita Ram is a good analyst but occasionally gets confused when making decisions. He tends to be hesitant about reaching out to people. When we interacted, he asked me for resources to learn and sometimes pinged me about understanding previously resolved alerts. We discussed URL/malware analysis, and he learned quickly and applied the knowledge effectively. He consistently supports and helps colleagues during shifts, never hesitating to pick up alerts.
+1. **Reconnaissance:**
+   - **Objective:** Gather information about the target.
+   - **Activities:** Attackers research the target's infrastructure, employees, and potential vulnerabilities. This can involve scanning network ports, social engineering, and gathering publicly available information.
 
-I believe he would benefit from more training on the topic and a bit more guidance. He needs some time to settle in, and I should participate more to help him express his queries and understand the topic better.
+2. **Initial Compromise:**
+   - **Objective:** Gain initial access to the target's network.
+   - **Activities:** Attackers use methods such as phishing emails, exploiting software vulnerabilities, or leveraging weak passwords to infiltrate the network.
+
+3. **Establishing Foothold:**
+   - **Objective:** Maintain persistent access within the target network.
+   - **Activities:** Once inside, attackers deploy malware or backdoors to ensure continued access. They might use legitimate tools and techniques to avoid detection.
+
+4. **Escalation of Privileges:**
+   - **Objective:** Gain higher-level access within the network.
+   - **Activities:** Attackers exploit vulnerabilities or use stolen credentials to escalate privileges, often aiming to gain administrative control.
+
+5. **Internal Reconnaissance:**
+   - **Objective:** Map out the internal network structure and identify key assets.
+   - **Activities:** Attackers move laterally within the network, scanning for valuable data and other targets of interest, while avoiding detection.
+
+6. **Maintaining Presence:**
+   - **Objective:** Ensure long-term access and control over the network.
+   - **Activities:** Attackers may install additional backdoors, rootkits, or leverage legitimate remote access tools to maintain their presence.
+
+7. **Exfiltration or Exploitation:**
+   - **Objective:** Extract valuable data or disrupt operations.
+   - **Activities:** Attackers collect and transfer sensitive data out of the network, or they might deploy ransomware, sabotage systems, or perform other malicious activities depending on their goals.
+
+8. **Covering Tracks:**
+   - **Objective:** Avoid detection and analysis of their activities.
+   - **Activities:** Attackers delete logs, remove malware, or alter data to hide their presence and make forensic analysis difficult.
+
+Each phase involves specific techniques and tactics that require different defensive measures to detect, prevent, and respond effectively.
+ 
