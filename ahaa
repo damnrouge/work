@@ -1,44 +1,68 @@
-Operation Overview
-Initial Access:
 
-Social Engineering: Scattered Spider often begins their attacks with social engineering tactics. They might impersonate employees, contractors, or IT support to trick legitimate users into divulging credentials or clicking on malicious links.
-Phishing: They deploy phishing emails that lure victims into providing their login information or clicking on links that download malware.
-Credential Harvesting:
+### Response Guide for AWS Excessive Security Scanning Alert
 
-MFA Fatigue: This technique involves bombarding a user with multiple Multi-Factor Authentication (MFA) requests, hoping that the user, out of frustration or confusion, will eventually approve one of the requests, granting the attacker access.
-Persistence and Lateral Movement:
+#### 1. **Initial Alert Review**
+   - **Alert Details:** Review the alert details to understand the scope and context.
+     - **User Identity:** Identify the user triggering the alert.
+     - **Event Count:** Confirm the number of Describe, List, or Get API calls exceeds 50.
+     - **Timestamp:** Note the time period during which the events occurred.
 
-Remote Monitoring and Management (RMM) Tools: Once inside the network, Scattered Spider often installs RMM tools like AnyDesk or TeamViewer. These tools are typically used by legitimate IT support teams but can be weaponized by attackers to maintain persistence and control over the compromised systems.
-Exploiting Legitimate Tools: They leverage legitimate administrative tools like PowerShell, PsExec, and Windows Management Instrumentation (WMI) to move laterally across the network, avoiding detection by security software that may not flag these as malicious.
-Privilege Escalation:
+#### 2. **Investigate User Activity**
+   - **User Verification:**
+     - Verify if the user is a legitimate account with valid credentials.
+     - Check if the user has any history of similar activities.
+   - **Contextual Review:**
+     - Review the user's activity logs for any patterns or anomalies.
+     - Check if the user is performing expected activities based on their role.
 
-Exploitation of Vulnerabilities: The group exploits known vulnerabilities in software and systems to escalate their privileges within the network. This could involve exploiting unpatched systems or leveraging zero-day vulnerabilities.
-Credential Dumping: They use tools like Mimikatz to dump credentials from memory, enabling them to access other accounts with higher privileges.
-Data Exfiltration and Impact:
+#### 3. **Analyze API Calls**
+   - **API Call Analysis:**
+     - Identify the specific Describe, List, or Get API calls made.
+     - Determine if these API calls are typical for the user's role or access level.
+     - Look for any sequences or patterns indicating reconnaissance or enumeration attempts.
 
-Data Theft: Scattered Spider typically exfiltrates sensitive data, which can then be used for blackmail, sold on the dark web, or used in further attacks.
-Ransomware Deployment: In some cases, they deploy ransomware to encrypt the victim's data, demanding a ransom payment for decryption keys.
-Techniques Used
-MFA Fatigue:
+#### 4. **Validate the Threat**
+   - **Reconnaissance Indicators:**
+     - Check for other signs of reconnaissance, such as unusual login times, access to new resources, or multiple IP addresses.
+   - **Cross-Check with Other Alerts:**
+     - Review if there are other related alerts involving the same user or similar activities.
+   - **Historical Comparison:**
+     - Compare the current activity with past data to identify deviations from the norm.
 
-Description: Attackers flood a user with numerous MFA push notifications, hoping the user will eventually accept one, granting the attacker access.
-Mitigation: Users should be trained to recognize and report unusual MFA prompts. Implementing additional security measures like context-based MFA can help.
-Installing RMM Tools:
+#### 5. **Immediate Actions**
+   - **Containment:**
+     - If the activity is confirmed suspicious, consider temporarily suspending the user account.
+     - Revoke or reduce the user’s permissions to critical resources.
+   - **Communication:**
+     - Inform relevant stakeholders and the user’s manager about the suspicious activity.
+     - Coordinate with other security teams for a comprehensive response.
 
-Description: Attackers install Remote Monitoring and Management (RMM) tools to maintain persistent access and control over the compromised systems.
-Mitigation: Monitor for unusual installations and use of RMM tools. Implement application whitelisting and enforce strict access controls.
-Credential Dumping:
+#### 6. **Further Investigation**
+   - **Detailed Log Analysis:**
+     - Conduct a deeper analysis of AWS CloudTrail logs for additional context.
+     - Look for any signs of data access or exfiltration attempts.
+   - **System Integrity Check:**
+     - Verify the integrity of the AWS environment and check for any unauthorized changes.
+     - Ensure no sensitive data has been accessed or compromised.
 
-Description: Tools like Mimikatz are used to extract credentials from memory, allowing attackers to move laterally and escalate privileges.
-Mitigation: Regularly update and patch systems, use credential guard features, and monitor for abnormal credential access patterns.
-Lateral Movement:
+#### 7. **Document Findings**
+   - **Incident Report:**
+     - Document all findings, actions taken, and conclusions in an incident report.
+     - Include evidence from logs, user activity, and any other relevant data.
+   - **Review with Team:**
+     - Conduct a review session with the security team to discuss the incident and response.
 
-Description: Using legitimate administrative tools, attackers move laterally across the network to identify and compromise additional systems.
-Mitigation: Monitor and restrict the use of administrative tools, segment networks, and implement robust logging and monitoring.
-Defense Strategies
-User Education: Regular training on recognizing phishing attempts and social engineering tactics.
-MFA: Implement robust MFA solutions and educate users on how to respond to MFA prompts.
-Endpoint Detection and Response (EDR): Deploy EDR solutions to detect and respond to malicious activities.
-Network Segmentation: Segment networks to limit lateral movement.
-Regular Patching: Ensure all systems are regularly updated and patched to prevent exploitation of vulnerabilities.
-By understanding and anticipating these tactics, organizations can better prepare their defenses against Scattered Spider and similar threat actors.
+#### 8. **Post-Incident Actions**
+   - **User Education:**
+     - If the user’s activity was non-malicious but inappropriate, provide guidance on proper usage.
+   - **Policy and Rule Adjustment:**
+     - Review and update security policies and detection rules to prevent similar incidents.
+   - **Awareness Training:**
+     - Conduct training sessions to raise awareness about security practices and potential threats.
+
+#### 9. **Continuous Monitoring**
+   - **Enhanced Monitoring:**
+     - Place the user under enhanced monitoring for a defined period.
+     - Regularly review logs and alerts for any signs of repeated suspicious activity.
+
+By following this response guide, we can ensure a thorough and effective handling of excessive security scanning alerts in AWS, mitigating potential risks and maintaining the integrity of our cloud infrastructure.
