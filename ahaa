@@ -1,2 +1,70 @@
 
-  Targeted AWS Services: Identify which AWS services (e.g., EC2, S3, IAM) are being targeted by the API calls to understand potential attack vectors.User Agents: Identify the user agents involved in the API calls (e.g., Scout Suite, Paku) to determine if any known reconnaissance tools are being used.
+  ### Response Guidelines for AWS Excessive Security Scanning Alert
+
+#### 1. **Initial Alert Review**
+   - **Alert Details:**
+     - Confirm the alert details: user identity, event count, timestamps, targeted AWS services, user agents, request parameters, and recipient account.
+     - Verify if the number of Describe, List, or Get API calls exceeds 50 and assess the context of the activity.
+
+#### 2. **User Activity Investigation**
+   - **User Verification:**
+     - Verify the legitimacy of the user account and its credentials.
+     - Check for any previous similar activities by the user.
+   - **Behavior Analysis:**
+     - Analyze the user’s activity logs to identify any unusual or unexpected behavior.
+     - Compare the user's current activity with their historical behavior patterns.
+
+#### 3. **API Call Analysis**
+   - **Identify API Calls:**
+     - Determine the specific Describe, List, or Get API calls made by the user.
+     - Assess whether these API calls are typical for the user's role or access level.
+   - **User Agent Analysis:**
+     - Identify the user agents involved in the API calls (e.g., Scout Suite, Paku).
+     - Determine if these user agents are associated with known reconnaissance tools.
+   - **Request Parameters and Recipient Account:**
+     - Analyze the request parameters to understand the scope and specifics of the API calls.
+     - Identify the recipient account(s) involved in these API calls.
+
+#### 4. **Immediate Containment**
+   - **Account Actions:**
+     - Temporarily suspend the user account if the activity is confirmed to be suspicious.
+     - Revoke or reduce the user’s permissions to critical resources.
+   - **Network Actions:**
+     - Isolate any systems or instances that might be compromised.
+     - Implement temporary network segmentation if needed.
+
+#### 5. **Detailed Investigation**
+   - **Log Analysis:**
+     - Conduct a detailed review of AWS CloudTrail logs for additional context and evidence.
+     - Look for signs of data access or exfiltration attempts.
+   - **Reconnaissance Indicators:**
+     - Investigate other indicators of reconnaissance, such as unusual login times, access from multiple IP addresses, or access to new resources.
+   - **System Integrity Check:**
+     - Verify the integrity of the AWS environment and ensure no unauthorized changes have been made.
+     - Check for any signs of data exfiltration or access to sensitive data.
+
+#### 6. **Communication and Coordination**
+   - **Stakeholder Notification:**
+     - Inform relevant stakeholders, including the user's manager and security team members, about the suspicious activity.
+     - Coordinate with other security teams for a unified response.
+   - **Incident Documentation:**
+     - Document all findings, actions taken, and conclusions in an incident report.
+     - Include evidence from logs, user activity, and any other relevant data.
+
+#### 7. **Post-Incident Review and Actions**
+   - **User Education:**
+     - If the activity was non-malicious but inappropriate, provide guidance on proper usage.
+   - **Policy and Rule Adjustment:**
+     - Review and update security policies and detection rules to prevent similar incidents.
+   - **Awareness Training:**
+     - Conduct training sessions to raise awareness about security practices and potential threats.
+   - **Enhanced Monitoring:**
+     - Place the user under enhanced monitoring for a defined period.
+     - Regularly review logs and alerts for any signs of repeated suspicious activity.
+
+#### 8. **Continuous Monitoring**
+   - **Enhanced Monitoring:**
+     - Continue to monitor the user and related activities closely for a defined period.
+     - Adjust monitoring rules and thresholds based on insights gained from the incident.
+
+By following these response guidelines, you can ensure a comprehensive and effective approach to handling excessive security scanning alerts in AWS, mitigating potential risks, and maintaining the security and integrity of your cloud infrastructure.
