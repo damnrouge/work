@@ -1,70 +1,65 @@
+Based on the image you've provided, it appears you are working on creating a detection and response process for remote service installs via RDP. Here's a structured response guideline that you can use to handle such incidents effectively:
 
-  ### Response Guidelines for AWS Excessive Security Scanning Alert
+---
 
-#### 1. **Initial Alert Review**
-   - **Alert Details:**
-     - Confirm the alert details: user identity, event count, timestamps, targeted AWS services, user agents, request parameters, and recipient account.
-     - Verify if the number of Describe, List, or Get API calls exceeds 50 and assess the context of the activity.
+## **Detection & Response Guidelines for Remote Service Installs via RDP**
 
-#### 2. **User Activity Investigation**
-   - **User Verification:**
-     - Verify the legitimacy of the user account and its credentials.
-     - Check for any previous similar activities by the user.
-   - **Behavior Analysis:**
-     - Analyze the user’s activity logs to identify any unusual or unexpected behavior.
-     - Compare the user's current activity with their historical behavior patterns.
+### **Purpose**
+This document outlines the steps for detecting and responding to remote service installations initiated via Remote Desktop Protocol (RDP), which may be used by attackers for persistence and lateral movement.
 
-#### 3. **API Call Analysis**
-   - **Identify API Calls:**
-     - Determine the specific Describe, List, or Get API calls made by the user.
-     - Assess whether these API calls are typical for the user's role or access level.
-   - **User Agent Analysis:**
-     - Identify the user agents involved in the API calls (e.g., Scout Suite, Paku).
-     - Determine if these user agents are associated with known reconnaissance tools.
-   - **Request Parameters and Recipient Account:**
-     - Analyze the request parameters to understand the scope and specifics of the API calls.
-     - Identify the recipient account(s) involved in these API calls.
+### **Detection Strategy**
 
-#### 4. **Immediate Containment**
-   - **Account Actions:**
-     - Temporarily suspend the user account if the activity is confirmed to be suspicious.
-     - Revoke or reduce the user’s permissions to critical resources.
-   - **Network Actions:**
-     - Isolate any systems or instances that might be compromised.
-     - Implement temporary network segmentation if needed.
+1. **Data Source**:
+   - **Windows Event Logs**:
+     - Event ID 4624 (Logon Success with RDP)
+     - Event ID 4697 (Service Installation)
+   - **Splunk Queries**: The alert will rely on indexed logs from the `WinEventLog:Security` in Splunk.
+   
+2. **Query**:
+   - Utilize a Splunk query similar to the one shown in the image to track remote service installations from RDP sessions. This query focuses on:
+     - Successful logons using RDP (`Logon_Type=10`)
+     - Matching this with service installation logs (`EventCode=4697`)
+     - Filtering for specific services known to be related to persistence mechanisms (e.g., `svchost.exe`, `fspclogsvc.exe`).
 
-#### 5. **Detailed Investigation**
-   - **Log Analysis:**
-     - Conduct a detailed review of AWS CloudTrail logs for additional context and evidence.
-     - Look for signs of data access or exfiltration attempts.
-   - **Reconnaissance Indicators:**
-     - Investigate other indicators of reconnaissance, such as unusual login times, access from multiple IP addresses, or access to new resources.
-   - **System Integrity Check:**
-     - Verify the integrity of the AWS environment and ensure no unauthorized changes have been made.
-     - Check for any signs of data exfiltration or access to sensitive data.
+3. **Indicators to Monitor**:
+   - **Logon_Type**: Logon events indicating remote desktop connections (RDP).
+   - **Event_Code 4697**: Windows event logs indicating the installation of a new service.
+   - **Source IPs**: Correlate the source IP address to detect lateral movement within the network.
+   - **Service File Names**: Monitor for unusual or unauthorized services like `fspclogsvc.exe` or other non-standard service names.
 
-#### 6. **Communication and Coordination**
-   - **Stakeholder Notification:**
-     - Inform relevant stakeholders, including the user's manager and security team members, about the suspicious activity.
-     - Coordinate with other security teams for a unified response.
-   - **Incident Documentation:**
-     - Document all findings, actions taken, and conclusions in an incident report.
-     - Include evidence from logs, user activity, and any other relevant data.
+### **Response Actions**
 
-#### 7. **Post-Incident Review and Actions**
-   - **User Education:**
-     - If the activity was non-malicious but inappropriate, provide guidance on proper usage.
-   - **Policy and Rule Adjustment:**
-     - Review and update security policies and detection rules to prevent similar incidents.
-   - **Awareness Training:**
-     - Conduct training sessions to raise awareness about security practices and potential threats.
-   - **Enhanced Monitoring:**
-     - Place the user under enhanced monitoring for a defined period.
-     - Regularly review logs and alerts for any signs of repeated suspicious activity.
+1. **Immediate Containment**:
+   - **Isolate the Host**: If the host is confirmed to have a malicious service installed via RDP, isolate it from the network to prevent further lateral movement or persistence.
+   - **Terminate User Sessions**: Terminate the active user session associated with the RDP logon event to block further activities.
 
-#### 8. **Continuous Monitoring**
-   - **Enhanced Monitoring:**
-     - Continue to monitor the user and related activities closely for a defined period.
-     - Adjust monitoring rules and thresholds based on insights gained from the incident.
+2. **Analysis**:
+   - **Service Analysis**: Review the details of the installed service:
+     - Path of the service file (`C:\Windows\System32` or other unusual directories).
+     - Check if the service executable is signed or appears suspicious.
+   - **Investigate Source**: Analyze the source of the RDP connection. Check if the IP address is external or belongs to a known malicious range.
+   - **Account Review**: Verify if the account used for the RDP session was compromised (e.g., weak password or reused credentials).
 
-By following these response guidelines, you can ensure a comprehensive and effective approach to handling excessive security scanning alerts in AWS, mitigating potential risks, and maintaining the security and integrity of your cloud infrastructure.
+3. **Mitigation**:
+   - **Remove Unauthorized Services**: Uninstall or disable unauthorized services that were installed during the RDP session.
+   - **Change Credentials**: Reset the credentials for any accounts used during the unauthorized RDP session.
+   - **Patch the System**: Ensure that all relevant patches and updates are applied, particularly for vulnerabilities that allow RDP exploitation.
+
+4. **Long-Term Remediation**:
+   - **Harden RDP Access**: Implement network-level authentication (NLA) and restrict RDP access to trusted IPs.
+   - **Enable Multi-Factor Authentication (MFA)**: Enforce MFA for any user accounts that have remote access permissions.
+   - **Audit Service Installations**: Regularly audit the services installed on high-value servers to detect unauthorized additions.
+   - **Monitor for Persistence**: Continue to monitor the environment for any persistence techniques related to service installations or unusual RDP activity.
+
+5. **Reporting**:
+   - Document the incident and response actions in your SIEM or incident management system.
+   - Notify relevant stakeholders (IT, security teams) about the service installation and any potential data exfiltration or lateral movement activities.
+
+6. **Post-Incident Review**:
+   - Conduct a full investigation into how the attacker gained access to RDP and implemented a service.
+   - Perform a root cause analysis to address gaps in security controls.
+   - Update detection mechanisms, including Splunk queries and alerting rules, based on lessons learned.
+
+---
+
+This guideline should help streamline the detection and response processes for remote service installs via RDP and ensure a consistent response across your SOC team.
