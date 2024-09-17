@@ -63,3 +63,96 @@ This document outlines the steps for detecting and responding to remote service 
 ---
 
 This guideline should help streamline the detection and response processes for remote service installs via RDP and ensure a consistent response across your SOC team.
+
+
+
+
+Based on the search displayed in the screenshot, you want to create a detection rule for remote service installations via RDP, utilizing Windows Event Logs 4624 (successful logon) and 4697 (service installation) in Splunk.
+
+Here’s a step-by-step breakdown of what is needed for this detection rule, focusing on the relevant fields in both event logs.
+
+Windows Event Log 4624 – Successful Logon
+
+Key fields to monitor:
+
+Logon Type (field: LogonType): This identifies the logon method. Specifically, LogonType 10 refers to RDP logins.
+
+Logon ID (field: LogonID): A unique identifier for the logon session, useful for correlating activities within the same session.
+
+User Name (field: SubjectUserName): The account that was logged in.
+
+Source Network Address (field: IpAddress): The IP address of the source system that initiated the connection.
+
+
+Windows Event Log 4697 – Service Installed
+
+Key fields to monitor:
+
+Service File Name (field: ServiceFileName): The executable used for the service.
+
+Logon ID (field: LogonID): Same field as in Event 4624, used to correlate logon and service installation within the same session.
+
+User Name (field: SubjectUserName): The account that initiated the service installation.
+
+Service Name (field: ServiceName): The name of the installed service.
+
+
+Detection Logic
+
+1. Identify Remote Logon via RDP:
+
+Filter for EventCode 4624 where LogonType = 10 to detect interactive remote logons via RDP.
+
+
+
+2. Correlate with Service Installation:
+
+Look for EventCode 4697, which signifies a new service installation, within a short time window of the RDP logon (4624) from the same LogonID.
+
+
+
+3. Exclude Legitimate Services:
+
+Filter out known legitimate services, such as those located in C:\Windows\System32\, using the ServiceFileName field. Focus on suspicious or abnormal service names and paths.
+
+
+
+
+Search Query Example
+
+Here is an enhanced query based on the one shown in your screenshot:
+
+index=wineventlog source="WinEventLog:Security" 
+(EventCode=4624 AND Logon_Type=10) OR (EventCode=4697)
+| eval LogonID = coalesce(Logon_ID, LogonId)
+| stats latest(_time) as time values(Logon_Type) as Logon_Type values(Security_ID) as Security_ID values(user_email) as user_email values(user_identity) as user_identity by LogonID
+| join LogonID [search index=wineventlog source="WinEventLog:Security" EventCode=4697
+| stats values(Service_File_Name) as Service_File_Name values(Source_Network_Address) as Source_Network_Address by LogonID]
+| where Service_File_Name!="C:\\Windows\\System32\\svchost.exe" AND Service_File_Name!="C:\\Windows\\System32\\services.exe"
+| table _time LogonID Logon_Type Security_ID user_email user_identity Service_File_Name Source_Network_Address
+| sort - _time
+
+Key Fields to Monitor
+
+Logon Type (Logon_Type): Filter for RDP sessions.
+
+Logon ID (LogonID): Correlate logon and service installation.
+
+User Details (user_email, user_identity): Track the account initiating the logon and service install.
+
+Service File Name (Service_File_Name): Focus on non-legitimate service paths.
+
+Source Network Address (Source_Network_Address): The origin of the RDP connection.
+
+
+Considerations
+
+Time Window: Ensure you are looking at a reasonably small time window to detect lateral movement quickly.
+
+Legitimate Services: Fine-tune your filtering for well-known, legitimate services to reduce false positives.
+
+Correlations: Continuously monitor the correlation between Event 4624 and 4697 based on LogonID.
+
+
+This should provide a solid detection rule for suspicious remote service installations via RDP within Splunk using the Event Logs 4624 and 4697.
+
