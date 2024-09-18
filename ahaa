@@ -156,3 +156,24 @@ Correlations: Continuously monitor the correlation between Event 4624 and 4697 b
 
 This should provide a solid detection rule for suspicious remote service installations via RDP within Splunk using the Event Logs 4624 and 4697.
 
+
+
+
+Executive Summary: ServiceNow Knowledge Base Data Exposure
+
+Recent findings have revealed that over 1,000 instances of ServiceNow were leaking corporate knowledge base (KB) data due to misconfigurations. This exposure risk, uncovered by AppOmni, allowed unauthorized access to sensitive data including personal identifiable information (PII), internal system details, user credentials, and tokens for live production systems.
+
+Cause and Impact: The misconfigurations stemmed from improper access control settings, where public-facing widgets inadvertently allowed external users to access internal knowledge base articles. Attackers could exploit this vulnerability by brute-forcing article identifiers, exposing a wide range of sensitive data at scale.
+
+ServiceNow's Response: ServiceNow acknowledged the issue and, in response, issued updates and guidance to customers. In 2023, the company introduced enhanced Access Control Lists (ACLs) to protect customer data, but these updates were not universally applied to all knowledge base settings, leading to the continued exposure. As of September 2024, ServiceNow has taken proactive steps to further mitigate these risks, including working closely with affected customers and advising on best practices for configuring user access criteria.
+
+Recommendations for Organizations: ServiceNow administrators are advised to:
+
+1. Regularly audit and configure user criteria to prevent public access to sensitive knowledge bases.
+
+
+2. Implement ACLs effectively and use business rules to deny unauthenticated access to critical knowledge bases. 3
+
+
+
+
