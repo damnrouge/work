@@ -1,179 +1,119 @@
-Based on the image you've provided, it appears you are working on creating a detection and response process for remote service installs via RDP. Here's a structured response guideline that you can use to handle such incidents effectively:
+From the screenshot provided, it appears you're looking to create response guidelines for a specific alert related to public network access in a cloud environment (likely Azure). Here’s a clear, actionable guide for how to respond to this type of alert:
 
----
+Response Guidelines for Public Network Access Alert
 
-## **Detection & Response Guidelines for Remote Service Installs via RDP**
+1. Initial Triage and Validation
 
-### **Purpose**
-This document outlines the steps for detecting and responding to remote service installations initiated via Remote Desktop Protocol (RDP), which may be used by attackers for persistence and lateral movement.
+Verify if Public Network Access was Required:
 
-### **Detection Strategy**
+Check if the access was intended or needed for a specific use case.
 
-1. **Data Source**:
-   - **Windows Event Logs**:
-     - Event ID 4624 (Logon Success with RDP)
-     - Event ID 4697 (Service Installation)
-   - **Splunk Queries**: The alert will rely on indexed logs from the `WinEventLog:Security` in Splunk.
-   
-2. **Query**:
-   - Utilize a Splunk query similar to the one shown in the image to track remote service installations from RDP sessions. This query focuses on:
-     - Successful logons using RDP (`Logon_Type=10`)
-     - Matching this with service installation logs (`EventCode=4697`)
-     - Filtering for specific services known to be related to persistence mechanisms (e.g., `svchost.exe`, `fspclogsvc.exe`).
+Identify if it aligns with internal security policies and compliance standards.
 
-3. **Indicators to Monitor**:
-   - **Logon_Type**: Logon events indicating remote desktop connections (RDP).
-   - **Event_Code 4697**: Windows event logs indicating the installation of a new service.
-   - **Source IPs**: Correlate the source IP address to detect lateral movement within the network.
-   - **Service File Names**: Monitor for unusual or unauthorized services like `fspclogsvc.exe` or other non-standard service names.
 
-### **Response Actions**
+Cross-reference with Change Management:
 
-1. **Immediate Containment**:
-   - **Isolate the Host**: If the host is confirmed to have a malicious service installed via RDP, isolate it from the network to prevent further lateral movement or persistence.
-   - **Terminate User Sessions**: Terminate the active user session associated with the RDP logon event to block further activities.
+Ensure any public access settings were pre-approved via change management processes.
 
-2. **Analysis**:
-   - **Service Analysis**: Review the details of the installed service:
-     - Path of the service file (`C:\Windows\System32` or other unusual directories).
-     - Check if the service executable is signed or appears suspicious.
-   - **Investigate Source**: Analyze the source of the RDP connection. Check if the IP address is external or belongs to a known malicious range.
-   - **Account Review**: Verify if the account used for the RDP session was compromised (e.g., weak password or reused credentials).
+If no documentation is found, escalate for further investigation.
 
-3. **Mitigation**:
-   - **Remove Unauthorized Services**: Uninstall or disable unauthorized services that were installed during the RDP session.
-   - **Change Credentials**: Reset the credentials for any accounts used during the unauthorized RDP session.
-   - **Patch the System**: Ensure that all relevant patches and updates are applied, particularly for vulnerabilities that allow RDP exploitation.
 
-4. **Long-Term Remediation**:
-   - **Harden RDP Access**: Implement network-level authentication (NLA) and restrict RDP access to trusted IPs.
-   - **Enable Multi-Factor Authentication (MFA)**: Enforce MFA for any user accounts that have remote access permissions.
-   - **Audit Service Installations**: Regularly audit the services installed on high-value servers to detect unauthorized additions.
-   - **Monitor for Persistence**: Continue to monitor the environment for any persistence techniques related to service installations or unusual RDP activity.
 
-5. **Reporting**:
-   - Document the incident and response actions in your SIEM or incident management system.
-   - Notify relevant stakeholders (IT, security teams) about the service installation and any potential data exfiltration or lateral movement activities.
+2. Investigate the Alert:
 
-6. **Post-Incident Review**:
-   - Conduct a full investigation into how the attacker gained access to RDP and implemented a service.
-   - Perform a root cause analysis to address gaps in security controls.
-   - Update detection mechanisms, including Splunk queries and alerting rules, based on lessons learned.
+Source of Alert:
 
----
+Identify the resource (e.g., Storage Account, Key Vault, App Configuration) that triggered the alert.
 
-This guideline should help streamline the detection and response processes for remote service installs via RDP and ensure a consistent response across your SOC team.
+Validate the user or service that enabled public network access.
 
 
+Assess Time and Frequency:
 
+Determine when the public network access was enabled (firstTime and lastTime).
 
-Based on the search displayed in the screenshot, you want to create a detection rule for remote service installations via RDP, utilizing Windows Event Logs 4624 (successful logon) and 4697 (service installation) in Splunk.
+Review any activity performed after public access was enabled.
 
-Here’s a step-by-step breakdown of what is needed for this detection rule, focusing on the relevant fields in both event logs.
 
-Windows Event Log 4624 – Successful Logon
 
-Key fields to monitor:
+3. Review Azure Resource Access Control:
 
-Logon Type (field: LogonType): This identifies the logon method. Specifically, LogonType 10 refers to RDP logins.
+Permissions Review:
 
-Logon ID (field: LogonID): A unique identifier for the logon session, useful for correlating activities within the same session.
+Ensure that the proper RBAC (Role-Based Access Control) is applied, minimizing access to only authorized personnel.
 
-User Name (field: SubjectUserName): The account that was logged in.
 
-Source Network Address (field: IpAddress): The IP address of the source system that initiated the connection.
+Network Security Groups (NSG) and Firewalls:
 
+Verify if additional network security controls (e.g., NSGs, firewalls) are properly configured to restrict access even when public network access is enabled.
 
-Windows Event Log 4697 – Service Installed
 
-Key fields to monitor:
 
-Service File Name (field: ServiceFileName): The executable used for the service.
+4. Take Immediate Action if Needed:
 
-Logon ID (field: LogonID): Same field as in Event 4624, used to correlate logon and service installation within the same session.
+Disable Public Access:
 
-User Name (field: SubjectUserName): The account that initiated the service installation.
+If unauthorized or non-essential public access is found, immediately disable it.
 
-Service Name (field: ServiceName): The name of the installed service.
+Use cloud-native tools to restrict access (e.g., Private Endpoints, Virtual Networks).
 
 
-Detection Logic
+Isolate the Affected Resource:
 
-1. Identify Remote Logon via RDP:
+In case of suspected malicious access, isolate the resource until further investigation is complete.
 
-Filter for EventCode 4624 where LogonType = 10 to detect interactive remote logons via RDP.
 
 
+5. Notify Relevant Teams:
 
-2. Correlate with Service Installation:
+Incident Response Team:
 
-Look for EventCode 4697, which signifies a new service installation, within a short time window of the RDP logon (4624) from the same LogonID.
+Alert the SOC/Incident Response team to handle the incident as part of the response process.
 
 
+Data Owners and Admins:
 
-3. Exclude Legitimate Services:
+Notify the owners of the resource for further remediation or validation.
 
-Filter out known legitimate services, such as those located in C:\Windows\System32\, using the ServiceFileName field. Focus on suspicious or abnormal service names and paths.
 
 
+6. Documentation and Reporting:
 
+Annotations (CIS 20, MITRE ATT&CK, NIST):
 
-Search Query Example
+Correlate the findings with relevant security frameworks. For example:
 
-Here is an enhanced query based on the one shown in your screenshot:
+CIS 20 Control: Control 12.9, Ensure all network devices have logging enabled.
 
-index=wineventlog source="WinEventLog:Security" 
-(EventCode=4624 AND Logon_Type=10) OR (EventCode=4697)
-| eval LogonID = coalesce(Logon_ID, LogonId)
-| stats latest(_time) as time values(Logon_Type) as Logon_Type values(Security_ID) as Security_ID values(user_email) as user_email values(user_identity) as user_identity by LogonID
-| join LogonID [search index=wineventlog source="WinEventLog:Security" EventCode=4697
-| stats values(Service_File_Name) as Service_File_Name values(Source_Network_Address) as Source_Network_Address by LogonID]
-| where Service_File_Name!="C:\\Windows\\System32\\svchost.exe" AND Service_File_Name!="C:\\Windows\\System32\\services.exe"
-| table _time LogonID Logon_Type Security_ID user_email user_identity Service_File_Name Source_Network_Address
-| sort - _time
+MITRE ATT&CK: T1578, Modifying Cloud Compute Infrastructure.
 
-Key Fields to Monitor
+NIST: Refers to Access Control (AC-1) under NIST 800-53.
 
-Logon Type (Logon_Type): Filter for RDP sessions.
 
-Logon ID (LogonID): Correlate logon and service installation.
 
-User Details (user_email, user_identity): Track the account initiating the logon and service install.
+Kill Chain Stage:
 
-Service File Name (Service_File_Name): Focus on non-legitimate service paths.
+Determine where this event fits in the kill chain model (e.g., exploitation, persistence).
 
-Source Network Address (Source_Network_Address): The origin of the RDP connection.
 
 
-Considerations
+7. Post-Incident Actions:
 
-Time Window: Ensure you are looking at a reasonably small time window to detect lateral movement quickly.
+Audit Logs and Forensics:
 
-Legitimate Services: Fine-tune your filtering for well-known, legitimate services to reduce false positives.
+Gather logs from Azure activity and security monitoring to analyze any potential exploitation or lateral movement.
 
-Correlations: Continuously monitor the correlation between Event 4624 and 4697 based on LogonID.
 
+Review Security Policies:
 
-This should provide a solid detection rule for suspicious remote service installations via RDP within Splunk using the Event Logs 4624 and 4697.
+Ensure policies are updated to avoid public network access where not necessary.
 
 
+Provide Detailed Reports:
 
+Ensure that a full incident report is generated, including the timeline, actions taken, and preventive measures.
 
-Executive Summary: ServiceNow Knowledge Base Data Exposure
 
-Recent findings have revealed that over 1,000 instances of ServiceNow were leaking corporate knowledge base (KB) data due to misconfigurations. This exposure risk, uncovered by AppOmni, allowed unauthorized access to sensitive data including personal identifiable information (PII), internal system details, user credentials, and tokens for live production systems.
 
-Cause and Impact: The misconfigurations stemmed from improper access control settings, where public-facing widgets inadvertently allowed external users to access internal knowledge base articles. Attackers could exploit this vulnerability by brute-forcing article identifiers, exposing a wide range of sensitive data at scale.
-
-ServiceNow's Response: ServiceNow acknowledged the issue and, in response, issued updates and guidance to customers. In 2023, the company introduced enhanced Access Control Lists (ACLs) to protect customer data, but these updates were not universally applied to all knowledge base settings, leading to the continued exposure. As of September 2024, ServiceNow has taken proactive steps to further mitigate these risks, including working closely with affected customers and advising on best practices for configuring user access criteria.
-
-Recommendations for Organizations: ServiceNow administrators are advised to:
-
-1. Regularly audit and configure user criteria to prevent public access to sensitive knowledge bases.
-
-
-2. Implement ACLs effectively and use business rules to deny unauthenticated access to critical knowledge bases. 3
-
-
-
+By following these guidelines, you ensure a structured and effective response to public network access alerts, aligning with security best practices and compliance requirements.
 
