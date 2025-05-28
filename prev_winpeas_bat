@@ -1,0 +1,369 @@
+Comprehensive Windows Privilege Escalation Techniques (winPEAS.bat)
+This document covers all major privilege escalation techniques checked by the winPEAS.bat script, a batch file adaptation of the WinPEAS tool for enumerating vulnerabilities on Windows systems. Each technique includes a description of the vulnerability or misconfiguration, how the script checks for it, and the corresponding command-line operations.
+1. System Information
+Description:System details (OS version, patches) may reveal known vulnerabilities exploitable for privilege escalation. The script runs systeminfo to display OS details and suggests checking for version-specific exploits.
+CommandLine:  
+systeminfo
+
+2. Missing Hotfixes
+Description:Missing security patches (hotfixes) can expose systems to known exploits (e.g., MS11-080, MS16-032). The script lists installed hotfixes with wmic qfe and checks for specific KB patches on older OS versions (Windows 2000, XP, 2003, 2008, Vista, 7) to identify vulnerabilities like afd.sys or secondary logon.
+CommandLine:  
+wmic qfe get Caption,Description,HotFixID,InstalledOn | more
+for /f "tokens=3-9" %%a in ('systeminfo') do (ECHO."%%a %%b %%c %%d %%e %%f %%g" | findstr /i "2000 XP 2003 2008 vista" && set expl=yes) & (ECHO."%%a %%b %%c %%d %%e %%f %%g" | findstr /i /C:"windows 7" && set expl=yes)
+IF "%expl%" == "yes" wmic qfe get Caption,Description,HotFixID,InstalledOn | findstr /C:"KB2592799" 1>NUL
+IF "%expl%" == "yes" IF errorlevel 1 ECHO.MS11-080 patch is NOT installed! (Vulns: XP/SP3,2K3/SP3-afd.sys)
+...
+IF "%expl%" == "yes" wmic qfe get Caption,Description,HotFixID,InstalledOn | findstr /C:"KB2870008" 1>NUL
+IF "%expl%" == "yes" IF errorlevel 1 ECHO.MS13-081 patch is NOT installed! (Vulns: 7SP0/SP1_x86-track_popup_menu)
+
+3. Date and Time
+Description:Incorrect system date/time may allow exploitation of time-sensitive vulnerabilities. The script displays the current date and time for manual verification.
+CommandLine:  
+date /T
+time /T
+
+4. Audit Log Settings
+Description:Missing audit log settings may indicate weak monitoring, allowing undetected malicious activity. The script queries the audit policy registry key.
+CommandLine:  
+REG QUERY HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Policies\System\Audit 2>nul
+
+5. Windows Event Forwarding (WEF)
+Description:Lack of WEF configuration may mean logs are not centralized, reducing detection capabilities. The script checks WEF registry settings.
+CommandLine:  
+REG QUERY HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\EventLog\EventForwarding\SubscriptionManager 2>nul
+
+6. Legacy LAPS Installation
+Description:Legacy LAPS (Local Administrator Password Solution) randomizes local admin passwords. If absent, local admin accounts may be exploitable. The script checks the LAPS registry key.
+CommandLine:  
+REG QUERY "HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Services\AdmPwd" /v AdmPwdEnabled 2>nul
+
+7. Windows LAPS Installation
+Description:Windows LAPS manages local admin passwords, with options to back up to Entra or Active Directory. The script checks the LAPS backup directory setting (0x00=Disabled, 0x01=Entra, 0x02=AD).
+CommandLine:  
+REG QUERY "HKEY_LOCAL_MACHINE\Software\Microsoft\Policies\LAPS" /v BackupDirectory 2>nul
+REG QUERY "HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Policies\LAPS" /v BackupDirectory 2>nul
+
+8. LSA Protection
+Description:LSA Protection (RunAsPPL) prevents unauthorized LSASS memory access. If disabled (RunAsPPL not 1), credentials can be dumped. The script checks the RunAsPPL registry value.
+CommandLine:  
+REG QUERY "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\LSA" /v RunAsPPL 2>nul
+
+9. Credential Guard
+Description:Credential Guard isolates credentials in a virtualized environment. If disabled (LsaCfgFlags not 1 or 2), credentials are vulnerable. The script checks the LsaCfgFlags registry value.
+CommandLine:  
+REG QUERY "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\LSA" /v LsaCfgFlags 2>nul
+
+10. WDigest Plaintext Passwords
+Description:If UseLogonCredential=1 in the WDigest registry, plaintext passwords are stored in LSASS, extractable via tools like Mimikatz. The script checks this setting.
+CommandLine:  
+reg query HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest\UseLogonCredential 2>nul
+
+11. Cached Credentials
+Description:Cached logon credentials in the registry may be extractable with SYSTEM privileges. The script checks the CACHEDLOGONSCOUNT registry value.
+CommandLine:  
+reg query "HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon" /v CACHEDLOGONSCOUNT 2>nul
+
+12. UAC Settings
+Description:Disabled UAC (EnableLUA=0) allows certain escalation techniques without prompting. The script checks the UAC registry setting.
+CommandLine:  
+REG QUERY HKEY_LOCAL_MACHINE\Software\Microsoft\Windows\CurrentVersion\Policies\System /v EnableLUA 2>nul
+
+13. Antivirus Detection
+Description:Antivirus exclusions may allow malicious code execution. The script lists antivirus products via WMI and checks Windows Defender exclusion paths.
+CommandLine:  
+WMIC /Node:localhost /Namespace:\\root\SecurityCenter2 Path AntiVirusProduct Get displayName /Format:List | more
+reg query "HKLM\SOFTWARE\Microsoft\Windows Defender\Exclusions\Paths" 2>nul
+
+14. PowerShell Settings
+Description:PowerShell versions and logging settings may reveal exploitable configurations or logged sensitive commands. The script checks PowerShell versions (v2, v5), transcription, module logging, script block logging, transcript history, and command history.
+CommandLine:  
+REG QUERY HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PowerShell\1\PowerShellEngine /v PowerShellVersion 2>nul
+REG QUERY HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\PowerShell\3\PowerShellEngine /v PowerShellVersion 2>nul
+REG QUERY HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\PowerShell\Transcription 2>nul
+REG QUERY HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ModuleLogging 2>nul
+REG QUERY HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging 2>nul
+dir %SystemDrive%\transcripts\ 2>nul
+dir "%APPDATA%\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt" 2>nul
+
+15. Mounted Disks
+Description:Accessible drives may contain sensitive files or be writable for exploits. The script lists logical disks using wmic or fsutil.
+CommandLine:  
+(wmic logicaldisk get caption 2>nul | more) || (fsutil fsinfo drives 2>nul)
+
+16. Environment Variables
+Description:Environment variables may reveal sensitive paths or configurations. The script displays all variables with set.
+CommandLine:  
+set
+
+17. Installed Software
+Description:Unusual or vulnerable software (e.g., SCCM) may be exploitable. The script lists installed programs in Program Files, registry uninstall keys, and checks for SCCM.
+CommandLine:  
+dir /b "C:\Program Files" "C:\Program Files (x86)" | sort
+reg query HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall /s | findstr InstallLocation | findstr ":\\"
+reg query HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\ /s | findstr InstallLocation | findstr ":\\"
+IF exist C:\Windows\CCM\SCClient.exe ECHO.SCCM is installed (installers are run with SYSTEM privileges, many are vulnerable to DLL Sideloading)
+
+18. Remote Desktop Credentials Manager
+Description:RDCMan settings may store credentials in .rdg files. The script checks for the RDCMan settings file.
+CommandLine:  
+IF exist "%LOCALAPPDATA%\Local\Microsoft\Remote Desktop Connection Manager\RDCMan.settings" ECHO.Found: RDCMan.settings in %AppLocal%\Local\Microsoft\Remote Desktop Connection Manager\RDCMan.settings, check for credentials in .rdg files
+
+19. WSUS Misconfiguration
+Description:WSUS using HTTP (WUServer=http://) can be exploited to deliver malicious updates. The script checks WSUS registry settings for HTTP URLs.
+CommandLine:  
+reg query HKEY_LOCAL_MACHINE\Software\Policies\Microsoft\Windows\WindowsUpdate\ 2>nul | findstr /i "wuserver" | findstr /i "http://"
+
+20. Running Processes
+Description:Running processes with writable executables or directories may allow backdooring or DLL injection. The script lists processes with tasklist and checks file/directory permissions using icacls.
+CommandLine:  
+tasklist /SVC
+for /f "tokens=2 delims='='" %%x in ('wmic process list full^|find /i "executablepath"^|find /i /v "system32"^|find ":"') do (
+	for /f eol^=^"^ delims^=^" %%z in ('ECHO.%%x') do (
+		icacls "%%z" 2>nul | findstr /i "(F) (M) (W) :\\" | findstr /i ":\\ everyone authenticated users todos %username%" && ECHO.
+	)
+)
+for /f "tokens=2 delims='='" %%x in ('wmic process list full^|find /i "executablepath"^|find /i /v "system32"^|find ":"') do for /f eol^=^"^ delims^=^" %%y in ('ECHO.%%x') do (
+	icacls "%%~dpy\" 2>nul | findstr /i "(F) (M) (W) :\\" | findstr /i ":\\ everyone authenticated users todos %username%" && ECHO.
+)
+
+21. Startup Applications
+Description:Startup programs or scripts with writable binaries can be modified for escalation. The script checks registry Run/RunOnce keys, startup folders, and scheduled tasks, verifying permissions with icacls.
+CommandLine:  
+reg query HKLM\Software\Microsoft\Windows\CurrentVersion\Run 2>nul
+reg query HKLM\Software\Microsoft\Windows\CurrentVersion\RunOnce 2>nul
+reg query HKCU\Software\Microsoft\Windows\CurrentVersion\Run 2>nul
+reg query HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce 2>nul
+icacls "C:\Documents and Settings\All Users\Start Menu\Programs\Startup" 2>nul | findstr /i "(F) (M) (W) :\" | findstr /i ":\\ everyone authenticated users todos %username%" && ECHO.
+icacls "C:\Documents and Settings\All Users\Start Menu\Programs\Startup\*" 2>nul | findstr /i "(F) (M) (W) :\" | findstr /i ":\\ everyone authenticated users todos %username%" && ECHO.
+icacls "C:\Documents and Settings\%username%\Start Menu\Programs\Startup" 2>nul | findstr /i "(F) (M) (W) :\" | findstr /i ":\\ everyone authenticated users todos %username%" && ECHO.
+icacls "C:\Documents and Settings\%username%\Start Menu\Programs\Startup\*" 2>nul | findstr /i "(F) (M) (W) :\" | findstr /i ":\\ everyone authenticated users todos %username%" && ECHO.
+icacls "%programdata%\Microsoft\Windows\Start Menu\Programs\Startup" 2>nul | findstr /i "(F) (M) (W) :\" | findstr /i ":\\ everyone authenticated users todos %username%" && ECHO.
+icacls "%programdata%\Microsoft\Windows\Start Menu\Programs\Startup\*" 2>nul | findstr /i "(F) (M) (W) :\" | findstr /i ":\\ everyone authenticated users todos %username%" && ECHO.
+icacls "%appdata%\Microsoft\Windows\Start Menu\Programs\Startup" 2>nul | findstr /i "(F) (M) (W) :\" | findstr /i ":\\ everyone authenticated users todos %username%" && ECHO.
+icacls "%appdata%\Microsoft\Windows\Start Menu\Programs\Startup\*" 2>nul | findstr /i "(F) (M) (W) :\" | findstr /i ":\\ everyone authenticated users todos %username%" && ECHO.
+schtasks /query /fo TABLE /nh | findstr /v /i "disable deshab informa"
+
+22. AlwaysInstallElevated
+Description:If AlwaysInstallElevated=1 in HKLM or HKCU, users can install MSI files with SYSTEM privileges. The script checks both registry hives.
+CommandLine:  
+reg query HKCU\SOFTWARE\Policies\Microsoft\Windows\Installer /v AlwaysInstallElevated 2>nul
+reg query HKLM\SOFTWARE\Policies\Microsoft\Windows\Installer /v AlwaysInstallElevated 2>nul
+
+23. Network Shares
+Description:Network shares may have weak permissions, allowing unauthorized access. The script lists shares with net share.
+CommandLine:  
+net share
+
+24. Network Interfaces
+Description:Network interface configurations may reveal misconfigurations. The script displays details with ipconfig /all.
+CommandLine:  
+ipconfig /all
+
+25. Used Ports
+Description:Open ports may expose vulnerable services. The script lists listening ports with netstat -ano.
+CommandLine:  
+netstat -ano | findstr /i listen
+
+26. Firewall Configuration
+Description:Weak firewall rules may allow unauthorized access. The script displays firewall state and configuration with netsh.
+CommandLine:  
+netsh firewall show state
+netsh firewall show config
+
+27. ARP Table
+Description:ARP table entries may indicate network anomalies. The script displays the ARP table with arp -A.
+CommandLine:  
+arp -A
+
+28. Network Routes
+Description:Routing table misconfigurations may expose network paths. The script displays routes with route print.
+CommandLine:  
+route print
+
+29. Hosts File
+Description:Modified hosts file entries may indicate DNS spoofing. The script displays non-commented entries.
+CommandLine:  
+type C:\WINDOWS\System32\drivers\etc\hosts | findstr /v "^#"
+
+30. DNS Cache
+Description:DNS cache may reveal recently accessed hosts. The script displays cache entries with ipconfig /displaydns.
+CommandLine:  
+ipconfig /displaydns | findstr "Record" | findstr "Name Host"
+
+31. WiFi Credentials
+Description:WiFi profiles may store plaintext passwords. The script extracts SSIDs and passwords with netsh wlan show profiles.
+CommandLine:  
+for /f "tokens=4 delims=: " %%a in ('netsh wlan show profiles ^| find "Profile "') do (netsh wlan show profiles name=%%a key=clear | findstr /i "SSID Cipher Content" | find /v "Number" & ECHO)
+
+32. Current User Information
+Description:User privileges or tokens (e.g., SeImpersonatePrivilege) may allow escalation. The script displays user details with net user and whoami /all.
+CommandLine:  
+net user %username%
+net user %USERNAME% /domain 2>nul
+whoami /all
+
+33. Local Users
+Description:List of local users may reveal accounts to target. The script lists users with net user.
+CommandLine:  
+net user
+
+34. Local Groups
+Description:Membership in privileged groups may grant elevated access. The script lists local groups with net localgroup.
+CommandLine:  
+net localgroup
+
+35. Administrator Groups
+Description:Members of the Administrators group have elevated privileges. The script lists members, supporting localized group names (e.g., Administrators, Administradores).
+CommandLine:  
+net localgroup Administrators 2>nul
+net localgroup Administradores 2>nul
+
+36. Logged-In Users
+Description:Active user sessions may be targeted for credential theft. The script lists sessions with quser.
+CommandLine:  
+quser
+
+37. Kerberos Tickets
+Description:Kerberos tickets may be exploitable for privilege escalation. The script lists tickets with klist.
+CommandLine:  
+klist
+
+38. Clipboard Contents
+Description:Clipboard data may contain sensitive information (e.g., passwords). The script retrieves text using PowerShell’s Get-Clipboard.
+CommandLine:  
+powershell -command "Get-Clipboard" 2>nul
+
+39. Service Binary Permissions
+Description:Services with writable executables can be modified for escalation. The script uses wmic to get service paths and icacls to check permissions for non-system users.
+CommandLine:  
+for /f "tokens=2 delims='=='" %%a in ('cmd.exe /c wmic service list full ^| findstr /i "pathname" ^|findstr /i /v "system32"') do (
+    for /f %%b in ("%%a") do icacls "%%b" 2>nul | findstr /i "(F) (M) (W) :\\" | findstr /i ":\\ everyone authenticated users todos usuarios %username%" && ECHO
+)
+
+40. Service Registry Permissions
+Description:Writable service registry keys allow modification of service configurations. The script tests registry write access by attempting to save and restore keys.
+CommandLine:  
+for /f %%a in ('reg query hklm\system\currentcontrolset\services') do del %temp%\reg.hiv >nul 2>&1 & reg save %%a %temp%\reg.hiv >nul 2>&1 && reg restore %%a %temp%\reg.hiv >nul 2>&1 && ECHO.You can modify %%a
+
+41. Unquoted Service Paths
+Description:Unquoted service paths with spaces can be exploited by placing malicious binaries in parent directories. The script queries services with sc, filters non-system paths, and checks permissions with icacls.
+CommandLine:  
+for /f "tokens=1" %%n in ('sc query state= all^| findstr SERVICE_NAME') do (
+    for /f "delims=: tokens=1*" %%r in ('sc qc "%%~n" ^| findstr BINARY_PATH_NAME ^| findstr /i /v /l /c:"c:\windows\\system32" ^| findstr /v /c:"""') do (
+        ECHO.%%~s ^| findstr /r /c:"[a-Z][ ][a-Z]" >nul 2>&1 && (ECHO.%%n && ECHO.%%~s && icacls %%s | findstr /i "(F) (M) (W) :\" | findstr /i ":\\ everyone authenticated users todos %username%") && ECHO
+    )
+)
+
+42. PATH Environment Variable Hijacking
+Description:Writable directories in the PATH environment variable can be exploited for DLL or binary hijacking, allowing execution of malicious code when a program is run that searches for dependencies in those directories. The script checks permissions of PATH directories using icacls.
+CommandLine:  
+for %%A in ("%path:;=";"%") do ( cmd.exe /c icacls "%%~A" 2>nul | findstr /i "(F) (M) (W) :\" | findstr /i ":\\ everyone authenticated users todos %username%" && ECHO. )
+
+43. Windows Vault Credentials
+Description:Windows Vault stores credentials that may be accessed with tools like Mimikatz. The script lists stored credentials with cmdkey /list.
+CommandLine:  
+cmdkey /list
+
+44. DPAPI Master Keys
+Description:DPAPI master keys can be used to decrypt credentials, often with Mimikatz. The script lists master key files in %appdata% and %localappdata%.
+CommandLine:  
+powershell -Value "Get-ChildItem %appdata%\Microsoft\Protect" 2>nul
+powershell -Value "Get-ChildItem %localappdata%\Microsoft\Protect" 2>nul
+
+45. DPAPI Credential Files
+Description:DPAPI credential files may contain decryptable credentials. The script lists files in %appdata%\ and %localappdata%\Credentials.
+CommandLine:  
+dir /b/a %appdata%\Microsoft\Credentials\ 2>nul
+dir /b/a %localappdata%\Microsoft\Credentials\ 2>nul
+
+46. Unattended Installation Files
+Description:Unattended installation files (e.g., sysprep.xml, unattend.xml) may contain plaintext credentials. The script checks for these files in common locations.
+CommandLine:  
+IF EXIST %WINDIR%\sysprep\sysprep.xml ECHO %WINDIR%\sysprep\sysprep.xml exists.
+IF EXIST %WINDIR%\sysprep\sysprep.inf ECHO %WINDIR%\sysprep\sysprep.inf exists.
+IF EXIST %WINDIR%\sysprep.inf ECHO %WINDIR%\sysprep.inf exists.
+IF EXIST %WINDIR%\Panther\Unattended.xml ECHO %WINDIR%\Panther\Unattended.xml exists.
+IF EXIST %WINDIR%\Panther\Unattend.xml ECHO %WINDIR%\Panther\Unattend.xml exists.
+IF EXIST %WINDIR%\Panther\Unattend\Unattended.xml ECHO %WINDIR%\Panther\Unattend\Unattended.xml exists.
+IF EXIST %WINDIR%\System32\Sysprep\unattend.xml ECHO %WINDIR%\System32\Sysprep\unattend.xml exists.
+IF EXIST %WINDIR%\System32\Sysprep\unattended.xml ECHO %WINDIR%\System32\Sysprep\unattended.xml exists.
+IF EXIST %WINDIR%\..\unattend.txt ECHO %WINDIR%\..\unattend.txt exists.
+IF EXIST %WINDIR%\..\unattend.inf ECHO %WINDIR%\..\unattend.inf exists.
+
+47. SAM/Security Backups
+Description:Backup SAM/Security registry hives may contain credentials and be accessible to non-admin users. The script checks for these files in common locations.
+CommandLine:  
+IF EXIST %WINDIR%\repair\SAM ECHO %WINDIR%\repair\SAM exists.
+IF EXIST %WINDIR%\System32\config\RegBack\SAM ECHO %WINDIR%\System32\config\RegBack\SAM exists.
+IF EXIST %WINDIR%\System32\config\SAM ECHO %WINDIR%\System32\config\SAM exists.
+IF EXIST %WINDIR%\repair\SYSTEM ECHO %WINDIR%\repair\system exists.
+IF EXIST %WINDIR%\System32\config\SYSTEM ECHO %WINDIR%\System32\config\SYSTEM exists.
+IF EXIST %WINDIR%\System32\config\RegBack\SYSTEM ECHO %WINDIR%\System32\config\RegBack\system exists.
+
+48. McAfee SiteList Files
+Description:McAfee SiteList.xml files may contain decryptable passwords. The script searches for these files across Program Files, Program Files (x86), and user directories.
+CommandLine:  
+cd %ProgramFiles% 2>nul
+dir /s SiteList.xml 2>nul
+cd %ProgramFiles(x86)% 2>nul
+dir /s SiteList.xml 2>nul
+cd "%windir%\..\Documents and Settings" 2>nul
+dir /s SiteList.xml 2>nul
+cd %windir%\..\Users 2>nul
+dir /s SiteList.xml 2>nul
+
+49. Group Policy Permissions
+Description:Group Policy preference files (e.g., Groups.xml) may contain encrypted credentials, decryptable if accessible. The script searches Group Policy history for these files.
+CommandLine:  
+cd "%SystemDrive%\Microsoft\Group Policy\history" 2>nul
+dir /s/b Groups.xml == Services.xml == Scheduledtasks.xml == DataSources.xml == Printers.xml == Drives.xml 2>nul
+cd "%windir%\..\Documents and Settings\All Users\Application Data\Microsoft\Group Policy\history" 2>nul
+dir /s/b Groups.xml == Services.xml == Scheduledtasks.xml == DataSources.xml == Printers.xml == Drives.xml 2>nul
+
+50. Cloud Credentials
+Description:Cloud configuration files (e.g., AWS, Azure, GCP) may contain access keys or tokens. The script searches user directories for these files.
+CommandLine:  
+cd "%SystemDrive%\Users"
+dir /s/b .aws == credentials == gcloud == credentials.db == legacy_credentials == access_tokens.db == .azure == accessTokens.json == azureProfile.json 2>nul
+cd "%windir%\..\Documents and Settings"
+dir /s/b .aws == credentials == gcloud == credentials.db == legacy_credentials == access_tokens.db == .azure == accessTokens.json == azureProfile.json
+2>nul
+
+51. AppCmd
+Description:The presence of appcmd.exe (IIS management tool) may allow configuration modifications for escalation. The script checks for its existence.
+CommandLine:  
+IF EXIST %systemroot%\system32\inetsrv\appcmd.exe ECHO %systemroot%\system32\inetsrv\appcmd.exe exists.
+
+52. Registry and File Credential Search
+Description:Registry keys and files may store credentials or sensitive data (e.g., WinVNC, SNMP, PuTTY). The script queries registry keys and searches directories for files containing credentials or patterns like password.
+CommandLine:  
+reg query HKCU\Software\ORL\WinVNC3\Password 2>nul
+reg query HKEY_LOCAL_MACHINE\SOFTWARE\RealVNC\WinVNC4 /v password 2>nul
+reg query "HKLM\SOFTWARE\Microsoft\Windows NT\Currentversion\Winlogon" 2>nul | findstr /i "DefaultDomainName DefaultUserName DefaultPassword AltDefaultDomainName AltDefaultUserName AltDefaultPassword LastUsedUsername"
+reg query HKLM\SYSTEM\CurrentControlSet\Services\SNMP /s 2>nul
+reg query HKCU\Software\TightVNC\Server 2>nul
+reg query HKCU\Software\SimonTatham\PuTTY\Sess /s 2>nul
+reg query HKCU\Software\OpenSSH\Agent\Keys /s 2>nul
+cd %USERPROFILE% 2>nul && dir /s/b *password* == *credential* 2>nul
+cd ..\..\..\
+dir /s/b /A:-D RDCMan.settings == *.rdg == SCClient.exe == *_history == .sudo_as_admin_successful == .profile == *bashrc == httpd.conf == *.plan == .htpasswd == .git-credentials == *.rhosts == hosts.equiv == Dockerfile == docker-compose.yml == appcmd.exe == TypedURLs == TypedURLsTime == History == Bookmarks == Cookies == "Login Data" == places.sqlite == key3.db == key4.db == credentials == credentials.db == access_tokens.db == accessTokens.json == legacy_credentials == azureProfile.json == unattend.txt == access.log == error.log == *.gpg == *.pgp == *config*.php == elasticsearch.y*ml == kibana.y*ml == *.p12 == *.der == *.csr == *.cer == known_hosts == id_rsa == id_dsa == *.ovpn == anaconda-ks.cfg == hostapd.conf == rsyncd.conf == cesi.conf == supervisord.conf == tomcat-users.xml == *.kdbx == KeePass.config == Ntds.dit == SAM == SYSTEM == FreeSSHDservice.ini == sysprep.inf == sysprep.xml == unattend.xml == unattended.xml == *vnc*.ini == *vnc*.c*nf* == *vnc*.txt == *vnc*.xml == groups.xml == services.xml == scheduledtasks.xml == printers.xml == drives.xml == datasources.xml == php.ini == https.conf == https-xampp.conf == httpd.conf == my.ini == my.cnf == access.log == error.log == server.xml == SiteList.xml == ConsoleHost_history.txt == setupinfo == setupinfo.bak 2>nul | findstr /v ".dll"
+cd inetpub 2>nul && (dir /s/b web.config == *.log & cd ..)
+
+53. Extended Registry and File Scan (if long=true)
+Description:When the long flag is enabled, the script searches registry keys (HKLM, HKCU) for strings containing “pass” or “pwd” and scans drives for files (.xml, .ini, .txt, .cfg, .config) with “password” or names containing “pass”, “cred”, or “.config”. This may reveal credentials or sensitive data.
+CommandLine:  
+if "%long%" == "true" (
+    reg query HKLM /f passw /t REG_SZ /s
+    reg query HKCU /f passw /t REG_SZ /s
+    reg query HKLM /f pwd /t REG_SZ /s
+    reg query HKCU /f pwd /t REG_SZ /s
+    for /f %%x in ('wmic logicaldisk get name^| more') do (
+        set tdrive=%%x
+        if "!tdrive:~1,2!" == ":" (
+            %%x
+            findstr /s/n/m/i password *.xml *.ini *.txt *.cfg *.config 2>nul | findstr /v /i "\\AppData\\Local \\WinSxS ApnDatabase.xml \\UEV\\InboxTemplates \\Microsoft.Windows.Cloud \\Notepad\+\+ \\7-zip\\"
+            dir /s/b *pass* == *cred* == *.config* == *.cfg 2>nul | findstr /v /i "\\windows\\"
+        )
+    )
+)
+
