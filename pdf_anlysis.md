@@ -1,233 +1,237 @@
-Resources: https://prtksec.github.io/posts/MA_PDF_Notes/
+PDF Malware Analysis Notes
+This document serves as a concise, self-contained reference for PDF malware analysis, covering essential concepts, tools, and techniques for malware analysts. It is organized for quick navigation and practical use, with examples grounded in realistic scenarios.
+1. PDF Structure
+A PDF file is structured into four main components, each critical for malware analysis due to their potential to hide malicious content:
 
-PDF File Structure:
-- Header:
-    - The PDF file starts with a header containing a magic number (as a readable string) and the version of the format.
-    - For example: %PDF-1.7 indicates a PDF version 1.7.
-    - The header is organized using ASCII characters.
-- Body (Objects):
-    - The body of the PDF file contains the actual content, including pages, graphical elements, fonts, annotations, and other data.
-    - All content is encoded as a series of objects.
-    - Each object has a unique object number and generation number.
-    - Objects can represent text, images, fonts, annotations, and more.
-- Cross-Reference Table (XRef):
-    - The cross-reference table (XRef) lists the position of each object within the file.
-    - It facilitates random access to objects.
-    - The XRef table provides information about the byte offset of each object in the file.
-    - This allows efficient seeking and retrieval of specific objects.
-- Trailer Dictionary:
-    - The trailer dictionary resides in the file's trailer section (usually at the end of the file).
-    - It contains entries that allow the cross-reference table to be read.
-    - Key entries in the trailer dictionary include:
-        - /Size: Total number of entries in the cross-reference table (usually equal to the number of objects plus one).
-        - /Root: An indirect reference to the document catalog (the root of the PDF structure).
-        - /Info: An indirect reference to the document information dictionary.
-        - /ID: An array of two strings that uniquely identifies the file within a workflow.
-- Document Information Dictionary:
-    - The document information dictionary contains metadata about the PDF file.
-    - Entries within this dictionary include:
-        - /Title: The document's title (not necessarily the title displayed on the first page).
-        - /Subject: Subject of the document (arbitrary metadata).
-        - /Keywords: Keywords associated with the document.
-        - /Author: Name of the document's author.
-        - /CreationDate: Date when the document was created.
-        - /ModDate: Date when the document was last modified.
-        - /Creator: Name of the program that originally created the document.
-        - /Producer: Name of the program that converted the file to PDF.
+Header: Defines the PDF version (e.g., %PDF-1.4). Malicious PDFs may use non-standard headers to evade detection.
+Body: Contains PDF objects (e.g., text, images, scripts) that form the document’s content. Malware often resides in objects like JavaScript or embedded files.
+Cross-Reference Table (xref): Maps object locations for quick access. Manipulated xref tables can obscure malicious objects.
+Trailer: Specifies the location of the xref table and root object. Malicious trailers may point to hidden objects.
 
-Malware analyst POV
+Relevance to Malware Analysis:
 
-Header:
-The PDF file begins with a header that contains information about the PDF version (e.g., %PDF-1.7).
-As a malware analyst, pay attention to any anomalies in the header, such as unexpected versions or additional headers.
-Body (Objects):
-The body of the PDF file consists of a series of objects that define the operations performed by the file.
-These objects can include text, images, fonts, and scripting code (usually JavaScript).
-Malicious PDFs often hide their payload within these objects, so scrutinize them carefully.
-Cross-Reference (XRef) Table:
-The XRef table lists the byte offsets of each object within the file.
-It helps the PDF viewer render the objects correctly.
-For malware analysis, focus on identifying any irregularities in the XRef table, such as missing or duplicated entries.
-Trailer:
-The trailer is a special object within the PDF structure.
-It describes essential information, including the first object to be rendered by the PDF viewer (usually identified by the name object /Root).
-As a malware analyst, examine the trailer for any unexpected values or references.
+Malicious code is often embedded in the body’s objects (e.g., JavaScript streams).
+Obfuscated xref or trailer entries can hide malicious objects from basic parsers.
 
-
-Cross ref:
-- Object IDs (Indirect References):
-    - In a PDF document, object IDs (or indirect references) play a crucial role in linking different objects together.
-    - Each object in a PDF can be labeled as an indirect object, giving it a unique identifier.
-    - An indirect object is represented using the keywords obj and endobj.
-    - The format of an indirect reference is as follows:
-
-<object_number> <generation_number> obj
-
-        - <object_number>: A unique number assigned to the object.
-        - <generation_number>: Typically starts at 0 and increments when an object is updated.
-    - Indirect references allow one object to refer to another by specifying its object ID.
-    - For example, if object A refers to object B, it does so using an indirect reference like B 0 R.
-- Versioning:
-    - The PDF format has evolved over time, resulting in different versions.
-    - The version of a PDF document is specified in the header (e.g., %PDF-1.7 for PDF version 1.7).
-    - Newer versions may introduce additional features, security enhancements, or changes to the structure.
-    - Malware authors may exploit specific vulnerabilities associated with older PDF versions (e.g., outdated parsers).
-- Example (Malware Analysis):
-    - Imagine a malicious PDF file that exploits a vulnerability in Adobe Acrobat Reader.
-    - Let's say the attacker crafts the PDF with an embedded JavaScript payload.
-    - The payload is obfuscated and contains shellcode.
-    - Here's how the objects relate:
-        - Object A (the main document catalog) contains references to other objects, including the JavaScript stream (Object B).
-        - Object B (the JavaScript stream) contains the obfuscated shellcode.
-        - The shellcode (malicious payload) aims to exploit a vulnerability in the PDF viewer (e.g., CVE-2007-5659).
-        - The shellcode may use API calls like WriteFile and WinExec to execute arbitrary code on the victim's system.
-
-ACTION / KEYWORDS:
-- /openAction or /AA
-    - Purpose: Triggers actions when the PDF is opened.
-    - Malicious Example: Automatically executing a script to install malware upon document opening.
-- /javascript or /JS
-    - Purpose: Contains JavaScript code within the PDF.
-    - Malicious Example: Running a script that exploits a vulnerability in the PDF reader.
-- /Names
-    - Purpose: Stores named destinations or scripts.
-    - Malicious Example: Hiding a malicious script under a benign name.
-- /EmbeddedFile
-    - Purpose: Indicates a file is embedded within the PDF.
-    - Malicious Example: An executable malware file that runs when a user interacts with the PDF.
-- /URI or /submit form
-    - Purpose: Links to external resources or submits form data.
-    - Malicious Example: Sending collected data to an attacker's server or redirecting to a phishing site.
-- /launch
-    - Purpose: Launches applications or opens documents.
-    - Malicious Example: Executing a malware executable hidden within the PDF
-
-FILTERS:
-- /ASCIIHexDecode
-    - Purpose: Converts hexadecimal-encoded data into binary.
-    - Malicious Use: Malware can use this filter to hide its code in hexadecimal form, which is less conspicuous.
-- /ASCII85Decode
-    - Purpose: Transforms ASCII85-encoded data into binary.
-    - Malicious Use: This encoding is more compact than hexadecimal, allowing malware to embed more complex code in a smaller space.
-- /LZWDecode
-    - Purpose: Decompresses data encoded using LZW compression.
-    - Malicious Use: Malware can use LZW compression to make the code smaller and harder to detect.
-- /FlateDecode
-    - Purpose: Decompresses data encoded using the zlib/deflate compression method.
-    - Malicious Use: It's a commonly used filter that malware can use to compress its code, making analysis more difficult.
-- /RunLengthDecode
-    - Purpose: Decompresses data encoded using run-length encoding.
-    - Malicious Use: This filter can be used by malware to simplify the representation of repetitive data, which can help in hiding the code.
-- /CCITTFaxDecode
-    - Purpose: Decodes data that has been encoded using CCITT Group 3 or Group 4 compression.
-    - Malicious Use: This is typically used for image data but can be repurposed by malware to encode non-image data.
-- /JBIG2Decode
-    - Purpose: Decompresses data encoded using the JBIG2 standard, which is typically used for monochrome images.
-    - Malicious Use: Malware can use this for complex obfuscation of code, as it's designed for high compression ratios.
-- /DCTDecode
-    - Purpose: Decompresses data encoded using the DCT (JPEG) method.
-    - Malicious Use: While usually for images, malware can use this to obfuscate code within what appears to be an image.
-- /JPXDecode
-    - Purpose: Decompresses data encoded using the JPEG2000 standard.
-    - Malicious Use: Similar to /DCTDecode, it can be used by malware to hide code within image data.
-- /Crypt
-    - Purpose: Provides a way for PDF creators to include their own encryption and decryption algorithms.
-    - Malicious Use: Malware authors can use custom encryption to make their code unreadable without the proper key.
-
-
-Tools:
-pdfid
-pdf-parser (-s for search, -o to go to object)
-peepdf  (-i interactive mode)
-
-JAVA CODE OBFUSCATION:
-1.Base64 Encoding:
-    - Base64 encoding transforms plain text into a different format using a predefined character set. Malware authors encode their malicious JavaScript using Base64 to evade detection.
-    - Example:
-
-var encodedPayload = "aGVsbG8gd29ybGQ="; // Encoded string
-var decodedPayload = atob(encodedPayload); // Decode the string
-console.log(decodedPayload); // Outputs: "hello world"
-
-    - Reference:
-2.Invoke-Obfuscation (PowerShell):
-    - Invoke-Obfuscation is an open-source PowerShell command and script obfuscator available on GitHub. It provides various obfuscation methods for PowerShell scripts.
-    - Usage example:
-        - Set your command using SET SCRIPTBLOCK:
-
-Invoke-Obfuscation> set scriptblock Write-Host '(New-Object System.Net.WebClient).DownloadFile("https://secure-tactics.com/", "C:\\temp\\out.txt")'
-
-        - Use menus to select different obfuscation methods, and the encoded output will be printed.
-    - GitHub: Invoke-Obfuscation
-    - Reference:
-3. Whitespace Randomization:
-    - Insert random whitespace characters (e.g., space, tab, line feed) into the JavaScript code. This makes it harder to read and analyze.
-    - Example:
-
-var obfuscatedCode = "var\x20x\x20=\x20\x31\x20+\x202;";
-// Decoded: var x = 1 + 2;
-
-4. Variable and Function Name Mangling:
-    - Replace meaningful variable and function names with shorter, meaningless names. This confuses analysts trying to understand the code.
-    - Example:
-
-var a = 10;
-function b() {
-    return a * 2;
+Visual Aid: PDF Structure Diagram
+{
+  "type": "line",
+  "data": {
+    "labels": ["Header", "Body", "Cross-Reference Table", "Trailer"],
+    "datasets": [{
+      "label": "PDF File Structure",
+      "data": [1, 2, 3, 4],
+      "borderColor": "#4CAF50",
+      "fill": false,
+      "pointRadius": 5,
+      "pointBackgroundColor": "#4CAF50"
+    }]
+  },
+  "options": {
+    "scales": {
+      "y": {
+        "display": false
+      },
+      "x": {
+        "title": {
+          "display": true,
+          "text": "PDF File Components"
+        }
+      }
+    },
+    "plugins": {
+      "title": {
+        "display": true,
+        "text": "PDF File Structure Flow"
+      }
+    }
+  }
 }
 
-5. String Encryption:
-    - Encrypt strings within the code using custom algorithms or cryptographic libraries. Decrypt them during runtime.
-    - Example:
+2. PDF Objects
+PDF objects are the building blocks of a PDF file, and malware often exploits them to embed malicious content. Common object types include:
 
-var encryptedString = "encrypted data here";
-var decryptedString = customDecrypt(encryptedString);
+Dictionary: Key-value pairs (e.g., /Type /Page) that define object properties. Used to reference malicious scripts or actions.
+Stream: Binary data (e.g., images, JavaScript). Malware often hides in encoded streams.
+Array: Ordered collections of objects. Can reference malicious objects indirectly.
+Name: Strings prefixed with / (e.g., /JS). Used to trigger malicious actions.
+String: Text data, often encoded to hide malicious payloads.
 
-6. Control Flow Obfuscation:
-    - Shuffle the order of statements, use conditional jumps, and insert dead code paths to confuse static analysis tools.
-    - Example:
+Malware Usage:
 
-if (Math.random() > 0.5) {
-    // Legitimate code path
-    // ...
-} else {
-    // Dead code path
-    // ...
-}
+JavaScript code in streams (e.g., /JS or /JavaScript) can execute malicious actions.
+Embedded files in streams can deliver malware payloads (e.g., executables).
 
-7. Dynamic Code Generation:
-    - Generate JavaScript code dynamically at runtime using eval() or new Function(). This makes static analysis difficult.
-    - Example:
-
-var dynamicCode = "console.log('Dynamic code executed!');";
-eval(dynamicCode);
-
-8. Anti-Debugging Techniques:
-    - Detect if the code is being debugged (e.g., using breakpoints or developer tools) and alter behavior accordingly.
-    - Example:
-
-if (window.chrome && window.chrome.devtools) {
-    // Debugger detected
-    // ...
-}
-
-9. Dead Code Insertion:
-    - Add irrelevant or unreachable code segments to confuse analysts.
-    - Example:
-
-function legitimateFunction() {
-    // Legitimate code
-    // ...
-}
-function deadCode() {
-    // Irrelevant code
-    // ...
-}
-
--10.Obfuscated Shellcode:
-    - In malware targeting specific platforms, obfuscate shellcode (machine code) to avoid signature-based detection.
-    - Example (for Windows):
-
-var shellcode = "\x90\x90\x90\x90\x90"; // Obfuscated shellcode
+3. PDF Keywords
+Certain PDF keywords are commonly exploited in malware due to their ability to trigger actions or embed content:
 
 
+
+Keyword
+Description
+Malware Significance
+
+
+
+/JS, /JavaScript
+References JavaScript code
+Executes malicious scripts on document open
+
+
+/OpenAction
+Specifies an action to perform when the PDF opens
+Triggers malware without user interaction
+
+
+/ObjStm
+Defines an object stream
+Hides multiple objects in a compressed stream
+
+
+/EmbeddedFile
+Embeds external files
+Delivers malicious payloads (e.g., EXEs)
+
+
+/AA
+Additional actions (e.g., on page open/close)
+Executes scripts during user interactions
+
+
+Malware Relevance: These keywords are often used to initiate malicious behavior, such as executing scripts or extracting embedded files.
+4. PDF Tools
+Several tools are designed for PDF malware analysis, each with specific capabilities:
+
+PDFiD: Scans PDFs for suspicious keywords and structures to identify potential malice.
+PDF-Parser: Parses PDF objects and streams to reveal hidden content or scripts.
+Peepdf: Analyzes and modifies PDF structures, with a focus on JavaScript and embedded files.
+Origami: A framework for parsing and manipulating PDFs, useful for advanced analysis.
+QPDF: Decrypts and transforms PDFs, aiding in stream extraction.
+
+Purpose: These tools help analysts detect, dissect, and analyze malicious content in PDFs.
+5. String and Data Encoding in PDF Malware
+Malware authors use encoding to hide malicious content in PDFs. Common techniques include:
+
+ASCIIHexDecode: Encodes binary data as hexadecimal strings (e.g., <48656C6C6F> for "Hello").
+FlateDecode: Compresses streams using zlib, often hiding JavaScript or payloads.
+RunLengthDecode: Compresses repetitive data, used in streams to obscure content.
+Embedded Fonts: Custom fonts can hide encoded data in font streams.
+
+Example:
+
+A malicious JavaScript stream encoded with FlateDecode might appear as compressed gibberish but decode to executable code.
+
+Malware Application: Encoded streams evade signature-based detection and require decoding for analysis.
+6. Obfuscation Techniques
+Obfuscation makes malicious PDFs harder to detect. Common methods include:
+
+Name Obfuscation: Using non-standard or encoded names (e.g., /J#53 instead of /JS) to hide keywords.
+JavaScript Obfuscation: Minifying or encoding JavaScript (e.g., using eval() to execute dynamically generated code).
+Embedded Files: Hiding malicious payloads in /EmbeddedFile streams.
+Stream Compression: Using multiple encoding layers (e.g., FlateDecode + ASCIIHexDecode) to obscure content.
+Object Stream Hiding: Storing malicious objects in /ObjStm to reduce visibility.
+
+Role in Evasion: These techniques bypass static analysis tools and require dynamic or manual analysis.
+7. PDF Analysis Tools: Detailed Analysis
+PDFiD
+Purpose: Scans PDFs for suspicious keywords and structures to flag potential malware.Key Options:
+
+-s: Outputs statistics (e.g., keyword counts).
+-f: Forces analysis of non-PDF files.
+-e: Extra information (e.g., entropy of streams).
+
+Use Case 1: Detecting Embedded JavaScript
+
+Scenario: A PDF is suspected to contain malicious JavaScript triggered on open.
+Command:pdfid.py -s suspicious.pdf
+
+
+Explanation: The -s flag counts keywords like /JS or /OpenAction.
+Outcome: Output shows /JS 1, /OpenAction 1, indicating potential malice. High entropy in streams suggests obfuscation.
+
+Use Case 2: Checking for Embedded Files
+
+Scenario: Verify if a PDF contains embedded executables.
+Command:pdfid.py -e suspicious.pdf
+
+
+Explanation: The -e flag provides entropy and keyword details.
+Outcome: Reports /EmbeddedFile 1 and high stream entropy, flagging further investigation.
+
+PDF-Parser
+Purpose: Parses PDF objects and decodes streams to reveal hidden content.Key Options:
+
+-a: Displays all objects.
+-f: Applies filters to decode streams.
+-o <obj>: Analyzes a specific object.
+
+Use Case 1: Extracting JavaScript
+
+Scenario: A PDF contains a suspected malicious JavaScript stream.
+Command:pdf-parser.py -f -o 10 suspicious.pdf
+
+
+Explanation: Targets object 10 (identified via PDFiD) and decodes its stream (-f).
+Outcome: Decoded JavaScript reveals a malicious URL or shellcode.
+
+Use Case 2: Analyzing Object Streams
+
+Scenario: A PDF uses /ObjStm to hide objects.
+Command:pdf-parser.py -a suspicious.pdf | grep ObjStm
+
+
+Explanation: Lists objects containing /ObjStm for further inspection.
+Outcome: Identifies object numbers in /ObjStm, guiding targeted analysis.
+
+Peepdf
+Purpose: Analyzes and modifies PDFs, with strong JavaScript and interactive analysis capabilities.Key Options:
+
+-i: Interactive mode for manual exploration.
+-s <script>: Executes a script for automated analysis.
+-f: Forces parsing of broken PDFs.
+
+Use Case 1: Analyzing OpenAction Scripts
+
+Scenario: A PDF executes a script on open.
+Command:peepdf.py -i suspicious.pdf
+
+In interactive mode: search /OpenAction
+Explanation: Searches for /OpenAction and inspects linked objects.
+Outcome: Reveals a JavaScript object (e.g., obj 5) with malicious code.
+
+Use Case 2: Decoding Obfuscated Streams
+
+Scenario: A stream is encoded with FlateDecode and contains hidden malware.
+Command:peepdf.py -f suspicious.pdf
+
+In interactive mode: stream 7 > decoded.txt
+Explanation: Decodes stream in object 7 and saves it.
+Outcome: Decoded stream reveals an executable or malicious script.
+
+Visual Aid: Tool Comparison Table
+
+
+
+Tool
+Strengths
+Common Use Cases
+
+
+
+PDFiD
+Quick keyword detection
+Initial triage, flagging suspicious PDFs
+
+
+PDF-Parser
+Detailed object/stream parsing
+Extracting scripts, decoding streams
+
+
+Peepdf
+Interactive analysis, JS execution
+Deep analysis, script deobfuscation
+
+
+Conclusion
+These notes provide a comprehensive reference for PDF malware analysis, covering structure, objects, keywords, tools, encoding, and obfuscation techniques. The detailed tool examples and visual aids ensure practical applicability for analysts. For further exploration, refer to tool documentation or analyze real-world PDF samples.
