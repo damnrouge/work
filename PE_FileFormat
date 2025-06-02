@@ -228,3 +228,103 @@ _________________________________________________API_BY_Action__________________
 Remember that these are just a few examples, and there are many more Windows API functions available for different purposes. If you'd like more detailed information, you can refer to the https://github.com/7etsuo/windows-api-function-cheatsheets  on GitHub. 
 
 Common Packers used by malwares: upx, zlib, deflate
+
+
+-------------------------------------------------------------------------------------------------------------------------------------
+
+# PE File Structure & Malware API Reference
+
+## Table of Contents
+- [PE File Structure](#pe-file-structure)
+  - [DOS Header](#dos-header)
+  - [NT Headers](#nt-headers)
+  - [Section Table](#section-table)
+- [Critical Windows DLLs](#critical-windows-dlls)
+- [Malware API Cheatsheet](#malware-api-cheatsheet)
+  - [By Malware Type](#by-malware-type)
+  - [By Function Category](#by-function-category)
+- [Analysis Tips](#analysis-tips)
+- [Common Packers](#common-packers)
+
+## PE File Structure
+
+### DOS Header
+| Field | Importance | Notes |
+|-------|------------|-------|
+| **e_magic** ("MZ") | ⭐⭐⭐⭐⭐ | First bytes of any PE file. Malware may corrupt this to evade detection. |
+| **e_lfanew** | ⭐⭐⭐⭐ | Offset to PE header. Abnormal values may indicate packing. |
+
+### NT Headers
+#### File Header
+| Field | Importance | Notes |
+|-------|------------|-------|
+| **Machine** | ⭐⭐⭐⭐ | Target architecture (x86=0x14C, x64=0x8664) |
+| **NumberOfSections** | ⭐⭐⭐⭐ | >10 sections suggests packing |
+| **Characteristics** | ⭐⭐⭐⭐⭐ | Flags like IMAGE_FILE_DLL, IMAGE_FILE_EXECUTABLE_IMAGE |
+
+#### Optional Header
+| Field | Importance | Notes |
+|-------|------------|-------|
+| **AddressOfEntryPoint** | ⭐⭐⭐⭐⭐ | Where execution begins. Outside .text? Probably packed. |
+| **ImageBase** | ⭐⭐⭐⭐ | Default: 0x400000 (EXE), 0x10000000 (DLL) |
+| **Subsystem** | ⭐⭐⭐ | 2=GUI (hides console), 3=Console |
+| **DataDirectories** | ⭐⭐⭐⭐⭐ | Import/Export tables critical for analysis |
+
+### Section Table
+| Field | Importance | Notes |
+|-------|------------|-------|
+| **Characteristics** | ⭐⭐⭐⭐⭐ | .text with WRITE or .data with EXECUTE = malicious |
+| **VirtualSize** | ⭐⭐⭐ | Much larger than SizeOfRawData? Likely packed |
+
+## Critical Windows DLLs
+
+| DLL | Key Functions | Malware Usage |
+|------|----------------|----------------|
+| **kernel32.dll** | CreateProcess, VirtualAlloc | Process injection, memory allocation |
+| **ntdll.dll** | NtCreateFile, NtAllocateVirtualMemory | Low-level operations avoiding hooks |
+| **advapi32.dll** | RegSetValueEx, CryptEncrypt | Persistence, ransomware encryption |
+| **ws2_32.dll** | socket, connect | C2 communication |
+
+## Malware API Cheatsheet
+
+### By Malware Type
+1. **Viruses**
+   - `CreateFileA`, `WriteFile` - File infection
+   - `WriteProcessMemory` - Code injection
+
+2. **Trojans**
+   - `RegOpenKeyExA` - Registry persistence
+   - `URLDownloadToFileA` - Download payloads
+
+3. **Ransomware**
+   - `CryptGenKey`, `CryptEncrypt` - File encryption
+   - `DeleteFileA` - Remove original files
+
+### By Function Category
+| Category | Key APIs |
+|----------|----------|
+| **Process Injection** | VirtualAllocEx, WriteProcessMemory, CreateRemoteThread |
+| **Persistence** | RegCreateKeyEx, CreateService |
+| **Evasion** | IsDebuggerPresent, NtQuerySystemInformation |
+
+## Analysis Tips
+1. **Import Table Red Flags**
+   - Rare APIs like `URLDownloadToFileA` in non-browser software
+   - Suspicious combos: `VirtualAlloc` + `WriteProcessMemory` + `CreateRemoteThread`
+
+2. **Section Anomalies**
+   - Sections with both WRITE and EXECUTE
+   - Unusually named sections (e.g., "UPX0", ".axc")
+
+3. **Entry Point Checks**
+   - EP in last section (common in packed malware)
+   - EP pointing to zero-filled memory (runtime unpacking)
+
+## Common Packers
+- UPX
+- Themida
+- VMProtect
+- ASPack
+- MPRESS
+
+> **Note:** This reference is designed for malware analysts, reverse engineers, and forensic investigators. Always analyze suspicious files in a sandboxed environment.
