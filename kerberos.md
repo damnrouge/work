@@ -2,31 +2,27 @@ https://redsiege.com/tools-techniques/2020/10/detecting-kerberoasting/
 
 Kerberos Authentication:
 
-Client
-   |
-   | AS_REQ : The client requests an authentication ticket from the Authentication Server.
-   v
-Authentication Server (AS)
-   |
-   | AS_REP : The Authentication Server replies with a Ticket Granting Ticket (TGT)
-   v
-Client
-   |
-   | TGS_REQ : The client requests a service ticket from the Ticket Granting Server using the TGT.
-   v
-Ticket Granting Server (TGS)
-   |
-   | TGS_REP : The Ticket Granting Server replies with a service ticket
-   v
-Client
-   |
-   | AP_REQ : The client requests access to the service from the Service Server using the service ticket
-   v
-Service Server (SS)
-   |
-   | AP_REP (optional) : The Service Server replies to the client, confirming the service (this step is optional and is used for mutual authentication).
-   v
-Client
+sequenceDiagram
+    participant C as Client
+    participant AS as Authentication Server (AS)
+    participant TGS as Ticket Granting Server (TGS)
+    participant SS as Service Server (SS)
+
+    Note over C,AS: **Phase 1: Authentication (AS Exchange)**
+    C->>AS: AS_REQ (1)<br/>● Client Principal<br/>● TGS Principal<br/>● Timestamp (encrypted w/ Client's secret key)
+    AS->>C: AS_REP (2)<br/>● TGT (encrypted w/ TGS's secret key)<br/>● Session Key_S1 (encrypted w/ Client's secret key)
+
+    Note over C,TGS: **Phase 2: Ticket Granting (TGS Exchange)**
+    C->>TGS: TGS_REQ (3)<br/>● TGT<br/>● Authenticator (Client + Timestamp, encrypted w/ Session Key_S1)
+    TGS->>C: TGS_REP (4)<br/>● Service Ticket (encrypted w/ SS's secret key)<br/>● Session Key_S2 (encrypted w/ Session Key_S1)
+
+    Note over C,SS: **Phase 3: Service Access (AP Exchange)**
+    C->>SS: AP_REQ (5)<br/>● Service Ticket<br/>● Authenticator (encrypted w/ Session Key_S2)
+    alt Mutual Authentication
+        SS->>C: AP_REP (6)<br/>● Server Timestamp +1 (encrypted w/ Session Key_S2)
+    end
+
+    Note right of C: **Secure Session Established**<br/>● All further comms use Session Key_S2<br/>● Tickets expire to prevent replay
 
 Certainly! Here's a detailed explanation of the Kerberos authentication process, including the encryption and decryption details for each step:
 
