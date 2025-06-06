@@ -8,21 +8,28 @@ sequenceDiagram
     participant TGS as Ticket Granting Server (TGS)
     participant SS as Service Server (SS)
 
-    Note over C,AS: **Phase 1: Authentication (AS Exchange)**
-    C->>AS: AS_REQ (1)<br/>● Client Principal<br/>● TGS Principal<br/>● Timestamp (encrypted w/ Client's secret key)
-    AS->>C: AS_REP (2)<br/>● TGT (encrypted w/ TGS's secret key)<br/>● Session Key_S1 (encrypted w/ Client's secret key)
+    Note over C,AS: Phase 1: Authentication (AS Exchange)
+    C->>AS: AS_REQ (1)
+    Note right of C: Client Principal, TGS Principal,<br/>Timestamp (encrypted w/ Client key)
+    AS->>C: AS_REP (2)
+    Note right of AS: TGT (encrypted w/ TGS key),<br/>Session Key_S1 (encrypted w/ Client key)
 
-    Note over C,TGS: **Phase 2: Ticket Granting (TGS Exchange)**
-    C->>TGS: TGS_REQ (3)<br/>● TGT<br/>● Authenticator (Client + Timestamp, encrypted w/ Session Key_S1)
-    TGS->>C: TGS_REP (4)<br/>● Service Ticket (encrypted w/ SS's secret key)<br/>● Session Key_S2 (encrypted w/ Session Key_S1)
+    Note over C,TGS: Phase 2: Ticket Granting (TGS Exchange)
+    C->>TGS: TGS_REQ (3)
+    Note right of C: TGT + Authenticator<br/>(Client + Timestamp, encrypted w/ Session Key_S1)
+    TGS->>C: TGS_REP (4)
+    Note right of TGS: Service Ticket (encrypted w/ SS key),<br/>Session Key_S2 (encrypted w/ Session Key_S1)
 
-    Note over C,SS: **Phase 3: Service Access (AP Exchange)**
-    C->>SS: AP_REQ (5)<br/>● Service Ticket<br/>● Authenticator (encrypted w/ Session Key_S2)
+    Note over C,SS: Phase 3: Service Access (AP Exchange)
+    C->>SS: AP_REQ (5)
+    Note right of C: Service Ticket + Authenticator<br/>(encrypted w/ Session Key_S2)
     alt Mutual Authentication
-        SS->>C: AP_REP (6)<br/>● Server Timestamp +1 (encrypted w/ Session Key_S2)
+        SS->>C: AP_REP (6)
+        Note right of SS: Timestamp +1 (encrypted w/ Session Key_S2)
     end
-    ```
-    Note right of C: **Secure Session Established**<br/>● All further comms use Session Key_S2<br/>● Tickets expire to prevent replay
+
+    Note right of C: Secure Session Established:<br/>- Comms use Session Key_S2<br/>- Tickets expire (replay protection)
+```
 
 
 
