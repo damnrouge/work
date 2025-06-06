@@ -77,6 +77,46 @@ ________________________________________________________________________________
 KERBEROASTING:
 A **Kerberoasting attack** is a type of cyber attack that targets the Kerberos authentication protocol, which is commonly used in Windows networks. The attack is designed to extract service account credentials from Active Directory. Here's what you need to know to understand the attack:
 
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {
+  'primaryColor': '#f0f4f8',
+  'actorBkg': '#e3f2fd',
+  'actorBorder': '#90caf9',
+  'signalColor': '#333',
+  'noteBkgColor': '#fff8e1',
+  'noteTextColor': '#333',
+  'tertiaryColor': '#ffccbc'
+}}}%%
+
+sequenceDiagram
+    participant Attacker
+    participant AS as Authentication Server (AS)
+    participant TGS as Ticket Granting Server (TGS)
+    participant Service
+
+    Note over Attacker,AS: PHASE 1: Initial Compromise
+    Attacker->>AS: 1. AS_REQ (w/ compromised user creds)
+    AS-->>Attacker: 2. AS_REP (TGT encrypted w/ user's hash)
+
+    Note over Attacker,TGS: PHASE 2: Service Ticket Request
+    Attacker->>TGS: 3. TGS_REQ (Request ticket for target SPN)
+    TGS-->>Attacker: 4. TGS_REP (Service ticket encrypted w/ service account's hash)
+    Note right of Attacker: 🎯 Attacker captures this ticket
+
+    Note over Attacker: PHASE 3: Offline Attack
+    Attacker->>Attacker: 5. Brute-force service account's hash
+    Note right of Attacker: 💻 Uses Mimikatz/hashcat
+
+    Note over Attacker,Service: PHASE 4: Privilege Escalation
+    Attacker->>Service: 6. AP_REQ (Forged service ticket)
+    Service-->>Attacker: 7. AP_REP (Access granted)
+    Note right of Attacker: 🔥 Attacker impersonates service account
+
+    Note over AS,TGS: KDC Components
+    Note left of AS: Authentication Server (AS):<br/>- Issues TGTs
+    Note left of TGS: Ticket Granting Server (TGS):<br/>- Issues service tickets
+```
+
 1. **Service Principal Name (SPN)**: An SPN is an identifier given to a service instance to associate it with a service account. Kerberos uses SPNs to associate a service instance with a service account in Active Directory.
 
 2. **Kerberos Tickets**: These are encrypted tickets used by Kerberos for authenticating users and services. They contain a variety of information, including a timestamp and the user's group memberships.
