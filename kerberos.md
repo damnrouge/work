@@ -21,10 +21,10 @@ sequenceDiagram
     alt Mutual Authentication
         SS->>C: AP_REP (6)<br/>● Server Timestamp +1 (encrypted w/ Session Key_S2)
     end
-
+    ```
     Note right of C: **Secure Session Established**<br/>● All further comms use Session Key_S2<br/>● Tickets expire to prevent replay
 
-    ```
+
 
 Certainly! Here's a detailed explanation of the Kerberos authentication process, including the encryption and decryption details for each step:
 
