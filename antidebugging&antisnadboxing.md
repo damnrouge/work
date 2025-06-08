@@ -1,3 +1,5 @@
+### **Anti-Debugging Techniques**
+
 | Technique            | How it Works                              | Example Scenario                                |
 |----------------------|-------------------------------------------|--------------------------------------------------|
 | System API Calls     | Uses Windows API like `IsDebuggerPresent` | If `IsDebuggerPresent` returns true, malware shuts down to prevent analysis. |
@@ -12,6 +14,10 @@
 | GDT Monitoring      | Monitors Global Descriptor Table alterations. | If base address changes, stops execution. |
 
 <!-- -->
+
+<!-- -->
+### **Anti-Sandboxing Techniques**
+
 | Technique            | Definition                           | Example Scenario                          |
 |----------------------|--------------------------------------|-------------------------------------------|
 | Encryption           | Encrypts payload to hinder analysis. | Ransomware remains inert in sandbox without decryption key. |
@@ -26,6 +32,10 @@
 | Time Bomb            | Delays activation. | Only runs after 30 days (post-sandbox analysis). |
 
 <!-- -->
+
+<!-- -->
+
+### **Anti-Sandboxing for URLs**
 
 | Technique            | Definition                           | Example Scenario                          |
 |----------------------|--------------------------------------|-------------------------------------------|
