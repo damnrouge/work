@@ -1,131 +1,41 @@
-```mermaid
-
-Anti debugging:
-+----------------------+-------------------------------------------+--------------------------------------------------+
 | Technique            | How it Works                              | Example Scenario                                |
-+----------------------+-------------------------------------------+--------------------------------------------------+
-| System API Calls     | Uses Windows API like `IsDebuggerPresent` | If `IsDebuggerPresent` returns true, malware    |
-|                      | to check for debuggers.                   | shuts down to prevent analysis.                 |
-+----------------------+-------------------------------------------+--------------------------------------------------+
-| Code Modification    | Checks code checksum at startup and       | Starts with checksum `0x1234ABCD`. If it        |
-| Detection            | periodically for tampering.               | changes, stops malicious activities.            |
-+----------------------+-------------------------------------------+--------------------------------------------------+
-| Timing Checks        | Measures time to execute instructions.    | Executes a loop that should take 1ms. If longer, |
-|                      | Longer times may indicate debugging.      | assumes debugger is present and alters behavior.|
-+----------------------+-------------------------------------------+--------------------------------------------------+
-| Hardware Breakpoints | Checks CPU registers for hardware         | Scans DR0-DR7 debug registers. If non-zero,     |
-|                      | breakpoints used by debuggers.            | avoids executing critical code.                 |
-+----------------------+-------------------------------------------+--------------------------------------------------+
-| Exception Handling   | Triggers exceptions to see if handled     | Divides by zero. If program doesn't terminate,  |
-|                      | differently by a debugger.                | likely being debugged.                          |
-+----------------------+-------------------------------------------+--------------------------------------------------+
-| Process & Thread     | Enumerates processes/threads for          | Looks for `ollydbg.exe`. If found, suspends     |
-| Blocks               | debugging tools.                         | malicious operations.                           |
-+----------------------+-------------------------------------------+--------------------------------------------------+
-| Memory Checks        | Checks if code relocated in memory,       | Starts at `0x00400000`. If different, assumes   |
-|                      | which can occur when analyzed.            | debugger is present.                            |
-+----------------------+-------------------------------------------+--------------------------------------------------+
-| IDT                  | Monitors IDT for changes by debuggers.    | Checks interrupt handler address in IDT. If     |
-|                      |                                           | changes, deactivates malware.                   |
-+----------------------+-------------------------------------------+--------------------------------------------------+
-| LDT                  | Checks LDT for entries modified by        | Checks for unexpected segment selectors in LDT, |
-|                      | debuggers.                                | indicating debugging activity.                  |
-+----------------------+-------------------------------------------+--------------------------------------------------+
-| GDT                  | Monitors GDT for alterations signaling    | Monitors base address of GDT. If changes,       |
-|                      | debugger presence.                        | assumes being debugged and stops executing.     |
-+----------------------+-------------------------------------------+--------------------------------------------------+
+|----------------------|-------------------------------------------|--------------------------------------------------|
+| System API Calls     | Uses Windows API like `IsDebuggerPresent` | If `IsDebuggerPresent` returns true, malware shuts down to prevent analysis. |
+| Code Modification Detection | Checks code checksum at startup and periodically for tampering. | Starts with checksum `0x1234ABCD`. If changed, stops malicious activities. |
+| Timing Checks        | Measures time to execute instructions. Longer times may indicate debugging. | Executes a 1ms loop. If longer, assumes debugger is present. |
+| Hardware Breakpoints | Checks CPU registers (DR0-DR7) for hardware breakpoints. | Scans debug registers. If non-zero, avoids critical code. |
+| Exception Handling   | Triggers exceptions to detect debuggers. | Divides by zero. If program continues, likely being debugged. |
+| Process & Thread Blocks | Enumerates processes/threads for debuggers. | Looks for `ollydbg.exe`. If found, suspends operations. |
+| Memory Checks        | Checks if code relocated in memory. | Starts at `0x00400000`. If different, assumes debugger present. |
+| IDT Monitoring       | Monitors Interrupt Descriptor Table for changes. | Checks interrupt handler addresses. If modified, deactivates. |
+| LDT Checks          | Checks Local Descriptor Table for debugger modifications. | Verifies segment selectors for anomalies. |
+| GDT Monitoring      | Monitors Global Descriptor Table alterations. | If base address changes, stops execution. |
 
-________________________________________________________________________________________________________________________________________________________________________________________________
-Anti Snadboxing:
-+-----------------------+--------------------------------------+-------------------------------------------+
-| Technique             | Definition                           | Example Scenario                          |
-+-----------------------+--------------------------------------+-------------------------------------------+
-| Encryption            | Malware encrypts its payload, making | A ransomware encrypts its malicious       |
-|                       | it difficult for the sandbox to      | payload. When executed in a sandbox,     |
-|                       | analyze the code without the         | the payload remains encrypted and inert,  |
-|                       | decryption key.                      | evading analysis.                         |
-+-----------------------+--------------------------------------+-------------------------------------------+
-| Environment Scanners  | Malware checks for signs that it's   | Malware checks for the presence of        |
-|                       | running in a virtual environment,    | virtual machine-related drivers. If found,|
-|                       | such as specific registry values or  | it does not execute its malicious         |
-|                       | hardware configurations.             | functions.                                |
-+-----------------------+--------------------------------------+-------------------------------------------+
-| User Activity         | Malware may monitor user interactions| Malware remains dormant until it detects  |
-| Monitoring            | to detect if it's in a real user     | human-like mouse movements or keystrokes, |
-|                       | environment or a sandbox.            | which are less likely to occur in a       |
-|                       |                                      | sandbox.                                  |
-+-----------------------+--------------------------------------+-------------------------------------------+
-| AI Algorithms         | Advanced malware may use AI to       | AI-powered malware analyzes system        |
-|                       | differentiate between a sandbox and  | behavior patterns to determine if it's    |
-|                       | a real user environment.             | being analyzed and stays dormant if it    |
-|                       |                                      | suspects a sandbox.                       |
-+-----------------------+--------------------------------------+-------------------------------------------+
-| Sleep Loops           | Malware can include long sleep       | Malware executes a sleep command that     |
-|                       | commands to delay execution, hoping  | lasts longer than the sandbox's analysis  |
-|                       | the sandbox times out before the     | window, thus avoiding detection.          |
-|                       | malware reveals its behavior.        |                                           |
-+-----------------------+--------------------------------------+-------------------------------------------+
-| Fast Flux             | Malware rapidly changes network      | A botnet uses fast flux to frequently     |
-|                       | addresses to confuse and evade       | change its command and control server IPs,|
-|                       | network-based sandboxes.             | making it hard for sandboxes to track its |
-|                       |                                      | network behavior.                         |
-+-----------------------+--------------------------------------+-------------------------------------------+
-| Stalling Code         | Malware includes code that only      | Malware checks for the presence of        |
-|                       | executes when certain conditions are | specific files or settings unique to a    |
-|                       | met, which may never occur in a      | user's system before executing its payload|
-|                       | sandbox.                             |                                           |
-+-----------------------+--------------------------------------+-------------------------------------------+
-| Resource Checks       | Malware assesses the resources of the| Malware checks for an unusually low number|
-|                       | environment, such as CPU and memory, | of CPU cores, which is common in virtual  |
-|                       | to detect if it's in a sandbox.      | environments, and remains inactive if such|
-|                       |                                      | conditions are detected.                  |
-+-----------------------+--------------------------------------+-------------------------------------------+
-| Hook Detection        | Malware scans for hooks placed by    | Malware scans for known sandboxing hooks  |
-|                       | sandboxes to monitor system calls and| in system APIs and alters its behavior to |
-|                       | avoids making suspicious calls if    | avoid triggering these hooks.             |
-|                       | hooks are found.                     |                                           |
-+-----------------------+--------------------------------------+-------------------------------------------+
-| Time Bomb             | Malware is programmed to activate    | Malware sets a future activation date,    |
-|                       | only after a certain date or time,   | ensuring it remains dormant during the    |
-|                       | which may be beyond the sandbox's    | sandbox's analysis timeframe.             |
-|                       | analysis period.                     |                                           |
-+-----------------------+--------------------------------------+-------------------------------------------+
-
-______________________________________________________________________________________________________________________________________________________________________________________________
-Anti Snadboxing for urls: 
-+----------------------+--------------------------------------+-------------------------------------------+
+<!-- -->
 | Technique            | Definition                           | Example Scenario                          |
-+----------------------+--------------------------------------+-------------------------------------------+
-| System API Calls     | Analyze code without decryption key. | Payload remains encrypted and inert,      |
-|                      |                                      | evading analysis.                         |
-+----------------------+--------------------------------------+-------------------------------------------+
-| Environment Scanners | Checks for virtual environment signs.| Looks for VM-related drivers; if found,   |
-|                      |                                      | doesn't execute malicious functions.      |
-+----------------------+--------------------------------------+-------------------------------------------+
-| User Activity        | Monitors user interactions.          | Stays dormant until detecting human-like  |
-| Monitoring           |                                      | mouse movements or keystrokes.            |
-+----------------------+--------------------------------------+-------------------------------------------+
-| AI Algorithms        | Uses AI to differentiate             | Analyzes system behavior to stay dormant  |
-|                      | environments.                        | if suspected sandbox.                     |
-+----------------------+--------------------------------------+-------------------------------------------+
-| Sleep Loops          | Delays execution with long sleep     | Executes sleep command beyond sandbox's   |
-|                      | commands.                            | analysis window.                          |
-+----------------------+--------------------------------------+-------------------------------------------+
-| Fast Flux            | Changes network addresses rapidly.   | Uses fast flux in botnets to change       |
-|                      |                                      | command and control server IPs frequently.|
-+----------------------+--------------------------------------+-------------------------------------------+
-| Stalling Code        | Executes only under certain          | Checks for specific files/settings unique |
-|                      | conditions.                          | to a user's system before payload         |
-|                      |                                      | execution.                                |
-+----------------------+--------------------------------------+-------------------------------------------+
-| Resource Checks      | Assesses environment resources.      | Checks for low number of CPU cores,       |
-|                      |                                      | common in virtual environments.           |
-+----------------------+--------------------------------------+-------------------------------------------+
-| Hook Detection       | Scans for sandboxing hooks.         | Alters behavior to avoid triggering known |
-|                      |                                      | sandboxing hooks in system APIs.          |
-+----------------------+--------------------------------------+-------------------------------------------+
-| Time Bomb            | Activates after a set date/time.     | Sets future activation date to remain     |
-|                      |                                      | dormant during analysis timeframe.        |
-+----------------------+--------------------------------------+-------------------------------------------+
+|----------------------|--------------------------------------|-------------------------------------------|
+| Encryption           | Encrypts payload to hinder analysis. | Ransomware remains inert in sandbox without decryption key. |
+| Environment Scanners | Detects virtual machine artifacts. | Checks for VM drivers (e.g., VirtualBox). If found, exits. |
+| User Activity Monitoring | Watches for human interactions. | Only activates after detecting mouse movements/keystrokes. |
+| AI Algorithms        | Uses machine learning to detect sandboxes. | Analyzes system behavior patterns to identify analysis environments. |
+| Sleep Loops          | Delays execution with long sleeps. | Sleeps for 10 minutes (longer than sandbox timeout). |
+| Fast Flux            | Rapidly changes network addresses. | Botnet changes C2 server IPs every 5 minutes. |
+| Stalling Code        | Requires specific conditions to run. | Checks for `C:\real_user\documents` before executing. |
+| Resource Checks      | Profiles system resources. | Detects low CPU cores/RAM (common in VMs). |
+| Hook Detection       | Scans for API hooks. | Avoids calling hooked functions like `CreateProcess`. |
+| Time Bomb            | Delays activation. | Only runs after 30 days (post-sandbox analysis). |
 
-```
+<!-- -->
+
+| Technique            | Definition                           | Example Scenario                          |
+|----------------------|--------------------------------------|-------------------------------------------|
+| System API Calls     | Hides code from analysis. | Encrypted payload avoids sandbox inspection. |
+| Environment Scanners | Detects VM environments. | Exits if VMware tools detected. |
+| User Activity Monitoring | Requires human interaction. | Waits for mouse clicks before connecting to C2. |
+| AI Algorithms        | Behavioral analysis evasion. | Mimics legitimate browser traffic patterns. |
+| Sleep Loops          | Delays malicious actions. | JavaScript sleeps for 1 hour before phishing redirect. |
+| Fast Flux            | Rotates domain names/IPs. | Changes malicious domain every 10 minutes. |
+| Stalling Code        | Conditional execution. | Only loads payload if visited from specific referrer. |
+| Resource Checks      | Detects headless browsers. | Checks for Chrome `--headless` flag. |
+| Hook Detection       | Avoids monitored APIs. | Skips `XMLHttpRequest` if hooked. |
+| Time Bomb            | Scheduled activation. | Malicious iframe loads after 14 days. |
