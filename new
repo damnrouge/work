@@ -1,25 +1,7 @@
-# Benign local simulation of Relic downloader new version (no network)
-
-# Mock dead-drop resolver: read from local file or hardcoded
-$deadDropFile = "$env:TEMP\local_dead_drop.txt"
-if (Test-Path $deadDropFile) {
-    $subdomain = Get-Content $deadDropFile -TotalCount 1
-} else {
-    $subdomain = "testsub123"  # Hardcoded fallback
-}
-$c2Domain = "$subdomain.trycloudflare.com"  # Simulated domain construction
-
-# Mock resolution: hardcoded fake IP
-$ip = "192.0.2.1"  # Example test IP (RFC 5737)
-
-# Cache the c2Domain in registry
 $regPath = "HKCU:\Cursors"
-$cacheName = "1JBScrdzkt.sm2c1WhmAB0o"
 if (-not (Test-Path $regPath)) {
     New-Item -Path $regPath -Force
 }
-Set-ItemProperty -Path $regPath -Name $cacheName -Value $c2Domain
-
-# For benign test, log the simulation
-$logPath = "$env:TEMP\benign_relic_test.log"
-Add-Content -Path $logPath -Value "Simulated C2 domain: $c2Domain IP: $ip at $(Get-Date)"
+Set-ItemProperty -Path $regPath -Name "nLzTvI0bImeIeqyxHxTJ" -Value $frag1
+Set-ItemProperty -Path $regPath -Name "pQzUwJ1cKnfLerzxGyUK" -Value $frag2
+Set-ItemProperty -Path $regPath -Name "rMxVwL2dMogPfsayIzVL" -Value $frag3
