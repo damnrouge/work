@@ -88,3 +88,49 @@ TrayTip "HotWire Simulation", "WMI queries executed. Check " LogFile "."
 
 ; Keep script running
 Return
+
+
+
+#Requires AutoHotkey v2.0
+#SingleInstance Force
+Persistent
+
+LogFile := "simulation_log.txt"
+
+; Function to execute WMIC commands and append results to log
+RunWmicCommand(cmd) {
+    RunWait 'cmd.exe /c wmic ' cmd ' >> "' LogFile '" 2>&1', , Hide
+    FileAppend "`n--- " cmd " executed at " A_Now " ---`n", LogFile
+}
+
+; Collect Operating System information
+RunWmicCommand("os get Caption, Version, BuildNumber, InstallDate")
+
+; Collect Logical Disk information
+RunWmicCommand("logicaldisk get DeviceID, FileSystem, FreeSpace")
+
+; Collect Processor information
+RunWmicCommand("cpu get Name, MaxClockSpeed, NumberOfCores, Architecture")
+
+; Collect Video Controller information
+RunWmicCommand("path Win32_VideoController get Name, AdapterRAM, DriverVersion")
+
+; Collect Network Adapter Configuration
+RunWmicCommand("nicconfig where IPEnabled=true get IPAddress, DefaultIPGateway, DNSServerSearchOrder")
+
+; Collect Firewall Product information (corrected quote handling)
+RunWmicCommand('product where "Name like ''%firewall%''" get Name, Version, Status')
+
+; Collect AntiSpyware Product information (corrected quote handling)
+RunWmicCommand('product where "Name like ''%antispyware%''" get Name, Version, Status')
+
+; Collect Process information with executable path (corrected quote handling)
+RunWmicCommand('process where "ExecutablePath is not null" get Name, ExecutablePath, ProcessID')
+
+; Simulate C2 transmission by logging completion
+FileAppend "WMI queries completed and data logged at " A_Now "`n", LogFile
+
+TrayTip "HotWire Simulation", "WMI queries executed. Check " LogFile "."
+
+; Keep script running
+Return
