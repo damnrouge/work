@@ -306,3 +306,28 @@ Loop {
         LastWin := CurrentWin
     }
 }
+
+
+
+#Requires AutoHotkey v2.0
+#SingleInstance Force
+#NoTrayIcon
+
+LogFile := A_ScriptDir "\FullLog.txt"
+LastWin := ""
+
+~*:: {
+    global LastWin
+    try CurrentWin := WinGetTitle("A")
+    catch
+        CurrentWin := "N/A"
+    
+    Key := SubStr(A_ThisHotkey, 3)  ; Remove ~* prefix
+    
+    if (CurrentWin == LastWin) {
+        FileAppend "|" Key, LogFile
+    } else {
+        FileAppend (LastWin ? "`n" : "") CurrentWin "|" Key "|", LogFile
+        LastWin := CurrentWin
+    }
+}
