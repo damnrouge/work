@@ -1,34 +1,31 @@
-; simple_loader.ahk
-#NoEnv
+// test_dll.cpp
+#include <windows.h>
+#include <shellapi.h>
 
-; Load the DLL
-hModule := DllCall("LoadLibrary", "Str", "test_dll.dll")
+BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
+    return TRUE;
+}
 
-if (hModule) {
-    ; Call OpenCalculator
-    funcCalc := DllCall("GetProcAddress", "Ptr", hModule, "AStr", "OpenCalculator")
-    if (funcCalc) {
-        DllCall(funcCalc)
-    }
-    
-    Sleep, 1000
-    
-    ; Call OpenCommandPrompt
-    funcCMD := DllCall("GetProcAddress", "Ptr", hModule, "AStr", "OpenCommandPrompt")
-    if (funcCMD) {
-        DllCall(funcCMD)
-    }
-    
-    Sleep, 1000
-    
-    ; Call ShowMessageBox
-    funcMsg := DllCall("GetProcAddress", "Ptr", hModule, "AStr", "ShowMessageBox")
-    if (funcMsg) {
-        DllCall(funcMsg)
-    }
-    
-    ; Clean up
-    DllCall("FreeLibrary", "Ptr", hModule)
-} else {
-    MsgBox, Failed to load DLL
+// Function 1: Open Calculator
+extern "C" __declspec(dllexport) void OpenCalculator() {
+    ShellExecuteA(NULL, "open", "calc.exe", NULL, NULL, SW_SHOWNORMAL);
+}
+
+// Function 2: Open Command Prompt
+extern "C" __declspec(dllexport) void OpenCommandPrompt() {
+    ShellExecuteA(NULL, "open", "cmd.exe", NULL, NULL, SW_SHOWNORMAL);
+}
+
+// Function 3: Display MessageBox
+extern "C" __declspec(dllexport) void ShowMessageBox() {
+    MessageBoxA(NULL, "This is a test message from the DLL", "Test DLL", MB_OK | MB_ICONINFORMATION);
+}
+
+// Optional: Combined function that does all three
+extern "C" __declspec(dllexport) void RunAllTests() {
+    OpenCalculator();
+    Sleep(1000);
+    OpenCommandPrompt();
+    Sleep(1000);
+    ShowMessageBox();
 }
