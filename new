@@ -1,63 +1,141 @@
 #NoEnv
 #SingleInstance Force
+#Warn
 
-; Function to call DLL exports
-CallDllFunction(functionName) {
-    hModule := DllCall("LoadLibrary", "Str", "test_dll.dll")
+; DLL Tester for AutoHotkey v2.0
+; Test DLL functions: OpenCalculator, OpenCommandPrompt, ShowMessageBox, RunAllTests
+
+class DllTester {
+    static hModule := 0
     
-    if (!hModule) {
-        MsgBox("Failed to load DLL")
-        return false
+    ; Load the DLL
+    static LoadDll() {
+        if (this.hModule) {
+            this.UnloadDll()
+        }
+        
+        this.hModule := DllCall("LoadLibrary", "Str", "test_dll.dll", "Ptr")
+        if (!this.hModule) {
+            throw Error("Failed to load DLL: test_dll.dll")
+        }
+        return this.hModule
     }
     
-    funcAddr := DllCall("GetProcAddress", "Ptr", hModule, "AStr", functionName)
-    
-    if (!funcAddr) {
-        MsgBox("Function " functionName " not found")
-        DllCall("FreeLibrary", "Ptr", hModule)
-        return false
+    ; Unload the DLL
+    static UnloadDll() {
+        if (this.hModule) {
+            DllCall("FreeLibrary", "Ptr", this.hModule)
+            this.hModule := 0
+        }
     }
     
-    ; Call the function
-    result := DllCall(funcAddr)
+    ; Call a DLL function
+    static CallFunction(functionName) {
+        if (!this.hModule) {
+            this.LoadDll()
+        }
+        
+        funcAddr := DllCall("GetProcAddress", "Ptr", this.hModule, "AStr", functionName, "Ptr")
+        if (!funcAddr) {
+            throw Error("Function '" functionName "' not found in DLL")
+        }
+        
+        ; Call the function
+        try {
+            result := DllCall(funcAddr)
+            return result
+        } catch as e {
+            throw Error("Error calling function '" functionName "': " e.Message)
+        }
+    }
     
-    ; Clean up
-    DllCall("FreeLibrary", "Ptr", hModule)
-    return true
+    ; Individual test functions
+    static TestCalculator() {
+        try {
+            this.CallFunction("OpenCalculator")
+            MsgBox("Calculator function executed successfully!", "DLL Test", "Iconi")
+        } catch as e {
+            MsgBox("Error: " e.Message, "DLL Test Error", "Iconx")
+        }
+    }
+    
+    static TestCommandPrompt() {
+        try {
+            this.CallFunction("OpenCommandPrompt")
+            MsgBox("Command Prompt function executed successfully!", "DLL Test", "Iconi")
+        } catch as e {
+            MsgBox("Error: " e.Message, "DLL Test Error", "Iconx")
+        }
+    }
+    
+    static TestMessageBox() {
+        try {
+            this.CallFunction("ShowMessageBox")
+            MsgBox("Message Box function executed successfully!", "DLL Test", "Iconi")
+        } catch as e {
+            MsgBox("Error: " e.Message, "DLL Test Error", "Iconx")
+        }
+    }
+    
+    static TestAllFunctions() {
+        try {
+            this.CallFunction("RunAllTests")
+            MsgBox("All functions executed successfully!", "DLL Test", "Iconi")
+        } catch as e {
+            MsgBox("Error: " e.Message, "DLL Test Error", "Iconx")
+        }
+    }
 }
 
-; Test GUI
-MyGui := Gui()
-MyGui.Add("Button", "w200", "Test Calculator").OnEvent("Click", TestCalc)
-MyGui.Add("Button", "w200", "Test Command Prompt").OnEvent("Click", TestCMD)
-MyGui.Add("Button", "w200", "Test Message Box").OnEvent("Click", TestMsg)
-MyGui.Add("Button", "w200", "Test All Functions").OnEvent("Click", TestAll)
-MyGui.Add("Button", "w200", "Exit").OnEvent("Click", ExitApp)
-
-MyGui.Title := "DLL Tester"
-MyGui.Show("w220 h200")
-return
-
-TestCalc(*) {
-    CallDllFunction("OpenCalculator")
+; Create the GUI
+CreateGui() {
+    MyGui := Gui()
+    MyGui.Title := "DLL Function Tester v2.0"
+    MyGui.OnEvent("Close", GuiClose)
+    MyGui.SetFont("s10", "Arial")
+    
+    ; Add buttons with better styling
+    MyGui.Add("Text", "w300 Center", "Test DLL Functions").SetFont("s12 Bold")
+    MyGui.Add("Text", "w300 Center", "test_dll.dll").SetFont("s9 Italic")
+    MyGui.Add("Button", "w280 h40", "📟 Open Calculator").OnEvent("Click", (*) => DllTester.TestCalculator())
+    MyGui.Add("Button", "w280 h40", "💻 Open Command Prompt").OnEvent("Click", (*) => DllTester.TestCommandPrompt())
+    MyGui.Add("Button", "w280 h40", "💬 Show Message Box").OnEvent("Click", (*) => DllTester.TestMessageBox())
+    MyGui.Add("Button", "w280 h40", "🚀 Test All Functions").OnEvent("Click", (*) => DllTester.TestAllFunctions())
+    MyGui.Add("Button", "w280 h40", "❌ Exit").OnEvent("Click", (*) => ExitApp())
+    
+    ; Status bar
+    statusBar := MyGui.Add("StatusBar")
+    statusBar.SetText("Ready to test DLL functions")
+    
+    return MyGui
 }
 
-TestCMD(*) {
-    CallDllFunction("OpenCommandPrompt")
-}
-
-TestMsg(*) {
-    CallDllFunction("ShowMessageBox")
-}
-
-TestAll(*) {
-    CallDllFunction("RunAllTests")
-}
-
-ExitApp(*) {
-    ExitApp
-}
-
+; GUI event handlers
 GuiClose(*) {
-    ExitApp
+    DllTester.UnloadDll()
+    ExitApp()
 }
+
+; Main execution
+try {
+    ; Try to load DLL initially to check if it exists
+    DllTester.LoadDll()
+    DllTester.UnloadDll()
+    
+    ; Create and show GUI
+    mainGui := CreateGui()
+    mainGui.Show("w300 h350")
+    
+    ; Set taskbar icon (optional)
+    try {
+        Menu Tray, Icon, shell32.dll, 25
+    }
+    
+} catch as e {
+    MsgBox("Error: " e.Message "`n`nMake sure test_dll.dll is in the same directory as this script.", 
+           "DLL Load Error", "Iconx")
+    ExitApp(1)
+}
+
+; Cleanup on exit
+OnExit((*) => DllTester.UnloadDll())
