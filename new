@@ -1,31 +1,63 @@
-// test_dll.cpp
-#include <windows.h>
-#include <shellapi.h>
+#NoEnv
+#SingleInstance Force
 
-BOOL APIENTRY DllMain(HMODULE hModule, DWORD ul_reason_for_call, LPVOID lpReserved) {
-    return TRUE;
+; Function to call DLL exports
+CallDllFunction(functionName) {
+    hModule := DllCall("LoadLibrary", "Str", "test_dll.dll")
+    
+    if (!hModule) {
+        MsgBox("Failed to load DLL")
+        return false
+    }
+    
+    funcAddr := DllCall("GetProcAddress", "Ptr", hModule, "AStr", functionName)
+    
+    if (!funcAddr) {
+        MsgBox("Function " functionName " not found")
+        DllCall("FreeLibrary", "Ptr", hModule)
+        return false
+    }
+    
+    ; Call the function
+    result := DllCall(funcAddr)
+    
+    ; Clean up
+    DllCall("FreeLibrary", "Ptr", hModule)
+    return true
 }
 
-// Function 1: Open Calculator
-extern "C" __declspec(dllexport) void OpenCalculator() {
-    ShellExecuteA(NULL, "open", "calc.exe", NULL, NULL, SW_SHOWNORMAL);
+; Test GUI
+MyGui := Gui()
+MyGui.Add("Button", "w200", "Test Calculator").OnEvent("Click", TestCalc)
+MyGui.Add("Button", "w200", "Test Command Prompt").OnEvent("Click", TestCMD)
+MyGui.Add("Button", "w200", "Test Message Box").OnEvent("Click", TestMsg)
+MyGui.Add("Button", "w200", "Test All Functions").OnEvent("Click", TestAll)
+MyGui.Add("Button", "w200", "Exit").OnEvent("Click", ExitApp)
+
+MyGui.Title := "DLL Tester"
+MyGui.Show("w220 h200")
+return
+
+TestCalc(*) {
+    CallDllFunction("OpenCalculator")
 }
 
-// Function 2: Open Command Prompt
-extern "C" __declspec(dllexport) void OpenCommandPrompt() {
-    ShellExecuteA(NULL, "open", "cmd.exe", NULL, NULL, SW_SHOWNORMAL);
+TestCMD(*) {
+    CallDllFunction("OpenCommandPrompt")
 }
 
-// Function 3: Display MessageBox
-extern "C" __declspec(dllexport) void ShowMessageBox() {
-    MessageBoxA(NULL, "This is a test message from the DLL", "Test DLL", MB_OK | MB_ICONINFORMATION);
+TestMsg(*) {
+    CallDllFunction("ShowMessageBox")
 }
 
-// Optional: Combined function that does all three
-extern "C" __declspec(dllexport) void RunAllTests() {
-    OpenCalculator();
-    Sleep(1000);
-    OpenCommandPrompt();
-    Sleep(1000);
-    ShowMessageBox();
+TestAll(*) {
+    CallDllFunction("RunAllTests")
+}
+
+ExitApp(*) {
+    ExitApp
+}
+
+GuiClose(*) {
+    ExitApp
 }
