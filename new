@@ -10,3 +10,38 @@ Then, the attacker modifies the recovery settings of that service to run a malic
 When the service is started (remotely), it crashes → the recovery action triggers → the attacker's program runs under SYSTEM privileges.
 Why this is stealthier:
 Windows logs the crash itself (Event IDs 7024, 7031, 7034), but none of these events record that a recovery program was executed or what program was launched. There is no dedicated event ID that clearly shows a recovery action took place. This makes the technique much harder to detect compared to methods that modify or expose suspicious ImagePaths."
+
+
+Here are the official documentation links and authoritative sources for Splunk Enterprise Security (ES) 8.0 and related ES 8.x documentation from Splunk:
+📘 Official Splunk Documentation
+
+
+Splunk Documentation home (search docs and product guides) — https://docs.splunk.com/Main_Page 
+
+
+Splunk Enterprise Security Release Notes (8.x series) — Official release notes showing changes across versions (8.1, 8.0, etc.) on Splunk Help site: https://help.splunk.com/en/splunk-enterprise-security-8/release-notes-and-resources/8.1/splunk-enterprise-security-release-notes/release-notes-for-splunk-enterprise-security 
+
+
+
+Note: Splunk organizes ES documentation under the “splunk-enterprise-security-8” hierarchy on docs.splunk.com — this is the authoritative source for all feature, installation, upgrade, and release details. 
+
+📙 Official Product Pages (Documented Features & Guides)
+
+
+Splunk Enterprise Security product overview and features — https://www.splunk.com/en_us/products/enterprise-security.html 
+
+
+Splunk Enterprise Security Essentials (8.0 features details) — https://www.splunk.com/en_us/products/splunk-enterprise-security-essentials-features.html 
+
+
+📄 Official Splunk Blog & Announcements
+
+
+General availability announcement for Splunk ES 8.0 (feature descriptions from the vendor) — https://www.splunk.com/en_us/blog/security/announcing-the-general-availability-of-splunk-enterprise-security-8-0.html 
+
+
+Splunk ES 8.0 + SOAR unified workflows blog — https://www.splunk.com/en_us/blog/security/splunk-enterprise-security-8-0-and-splunk-soar-6.3-unify-and-automate-tdir-workflows-within-the-market-leading-siem.html 
+
+
+
+If you want direct links to specific sections (e.g., installation & upgrade, mission control, detection rules, findings definitions), let me know and I’ll list those next with pointers to the exact Splunk doc pages.
