@@ -1,47 +1,80 @@
-"This article describes a simple yet powerful technique that attackers can use to achieve persistence by abusing Windows services.
-Almost every traditional service-based attack eventually gets detected because of one thing: the service ImagePath. Whether the attacker directly modifies the ImagePath to point to malware, uses malicious command lines, or relies on DLL hijacking — all of these methods leave detectable traces in Windows event logs (such as Event ID 7045, 4697, 4624, etc.).
-However, Windows services have a built-in feature called Service Recovery that is designed to help services recover automatically when they fail. Administrators can configure it to take different actions on the first failure, second failure, or subsequent failures — such as restarting the service, running a program, or even rebooting the computer. This feature exists to keep critical services running smoothly.
-Attackers can abuse this same recovery mechanism for stealthy execution. There are two main ways:
+Below are official Splunk documentation links for key feature and workflow areas in Splunk Enterprise Security 8.x (including 8.0) — each annotated with what you’ll find on that official doc page:
 
-Create a new service with an ImagePath that is known to crash immediately, or
-Find an existing legitimate service on the target system that crashes when started (for example, UevAgentService when UE-V is disabled).
+1) Mission Control (Unified SOC Workflow)
 
-Then, the attacker modifies the recovery settings of that service to run a malicious program or command (e.g. cmd.exe with payload commands) whenever the service fails.
-When the service is started (remotely), it crashes → the recovery action triggers → the attacker's program runs under SYSTEM privileges.
-Why this is stealthier:
-Windows logs the crash itself (Event IDs 7024, 7031, 7034), but none of these events record that a recovery program was executed or what program was launched. There is no dedicated event ID that clearly shows a recovery action took place. This makes the technique much harder to detect compared to methods that modify or expose suspicious ImagePaths."
+📌 Splunk Help: Overview of Mission Control in Splunk Enterprise Security
+➡️ https://help.splunk.com/en/splunk-enterprise-security-8/user-guide/8.3/mission-control/overview-of-mission-control-in-splunk-enterprise-security
 
+What it covers:
 
-Here are the official documentation links and authoritative sources for Splunk Enterprise Security (ES) 8.0 and related ES 8.x documentation from Splunk:
-📘 Official Splunk Documentation
+Analyst queue, charts, and timeline views
 
+How to triage, investigate, and respond to findings/investigations
 
-Splunk Documentation home (search docs and product guides) — https://docs.splunk.com/Main_Page 
+Navigation and core workflows inside Mission Control
 
+2) Findings & Investigation Management
 
-Splunk Enterprise Security Release Notes (8.x series) — Official release notes showing changes across versions (8.1, 8.0, etc.) on Splunk Help site: https://help.splunk.com/en/splunk-enterprise-security-8/release-notes-and-resources/8.1/splunk-enterprise-security-release-notes/release-notes-for-splunk-enterprise-security 
+📌 Splunk Help: Manage findings included in investigations
+➡️ https://help.splunk.com/en/splunk-enterprise-security-8/administer/8.1/investigations/manage-findings-included-in-investigations-in-splunk-enterprise-security
 
+What it covers:
 
+Adding/removing findings and finding groups to an investigation
 
-Note: Splunk organizes ES documentation under the “splunk-enterprise-security-8” hierarchy on docs.splunk.com — this is the authoritative source for all feature, installation, upgrade, and release details. 
+Workflows for grouping and triaging related security events
 
-📙 Official Product Pages (Documented Features & Guides)
+📌 Splunk Help: Findings and finding groups in Splunk Enterprise Security
+➡️ https://help.splunk.com/en/splunk-enterprise-security-8/administer/8.1/investigations/findings-and-finding-groups-in-splunk-enterprise-security
 
+What it covers:
 
-Splunk Enterprise Security product overview and features — https://www.splunk.com/en_us/products/enterprise-security.html 
+Definition and examples of findings/finding groups
 
+How they relate to investigations and triage workflows
 
-Splunk Enterprise Security Essentials (8.0 features details) — https://www.splunk.com/en_us/products/splunk-enterprise-security-essentials-features.html 
+3) Release Notes & Version-Specific Changes
 
+📌 Splunk Help: Release notes for Splunk Enterprise Security (8.0)
+➡️ https://help.splunk.com/en/splunk-enterprise-security-8/release-notes-and-resources/8.0/splunk-enterprise-security-release-notes/release-notes-for-splunk-enterprise-security
 
-📄 Official Splunk Blog & Announcements
+What it covers:
 
+List of new features and fixed issues in ES 8.0
 
-General availability announcement for Splunk ES 8.0 (feature descriptions from the vendor) — https://www.splunk.com/en_us/blog/security/announcing-the-general-availability-of-splunk-enterprise-security-8-0.html 
+Mission Control, analyst queue, and other fundamental changes
 
+📌 Splunk Help: Release notes for Splunk Enterprise Security (8.1)
+➡️ https://help.splunk.com/en/splunk-enterprise-security-8/release-notes-and-resources/8.1/splunk-enterprise-security-release-notes/release-notes-for-splunk-enterprise-security
 
-Splunk ES 8.0 + SOAR unified workflows blog — https://www.splunk.com/en_us/blog/security/splunk-enterprise-security-8-0-and-splunk-soar-6.3-unify-and-automate-tdir-workflows-within-the-market-leading-siem.html 
+What it covers:
 
+Additional updates after 8.0 (APIs, improvements, etc.)
 
+4) Upgrade & Installation Guidance
 
-If you want direct links to specific sections (e.g., installation & upgrade, mission control, detection rules, findings definitions), let me know and I’ll list those next with pointers to the exact Splunk doc pages.
+📌 Splunk Docs (Lantern hosted guide): Upgrading to Enterprise Security 8.x — Configuration & customization
+➡️ (Upgrade checklist & customization steps) https://lantern.splunk.com/Get_Started_with_Splunk_Software/Upgrading_to_Enterprise_Security_8.0.x_-_Configuration_and_customization
+
+📌 Splunk Docs (Lantern hosted guide): Upgrade — Walkthrough & validation
+➡️ (Post-upgrade validation workflows) https://lantern.splunk.com/Get_Started_with_Splunk_Software/Upgrading_to_Enterprise_Security_8.0.x_-_Walkthrough_and_validation
+
+(These are official Splunk guides hosted on Lantern, a Splunk doc platform used for upgrade procedures.)
+
+5) Settings & Administrative Controls
+
+📌 Splunk Help: Configure the status of findings and investigations
+➡️ https://help.splunk.com/en/splunk-enterprise-security-8/administer/8.0/investigations/configure-the-status-of-findings-and-investigations-in-splunk-enterprise-security
+
+What it covers:
+
+How to add, modify, and manage statuses for findings/investigations
+
+6) Enterprise Security Product Docs (Feature Overview)
+
+📌 Splunk Product Features pages:
+➡️ Enterprise Security feature overview — https://www.splunk.com/en_us/products/splunk-enterprise-security-features.html
+
+➡️ Enterprise Security general product page — https://www.splunk.com/en_us/products/enterprise-security.html
+
+If you want direct links to the specific Mission Control workflows, investigation examples, or detection rules content sections in the official Splunk docs, I can compile those next.
