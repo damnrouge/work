@@ -4,3 +4,5 @@ python -m PyInstaller --onefile --noconsole ^
 --collect-all imageio ^
 --collect-all moviepy ^
 Stager_PixelCode_To_Payload.py
+
+python -m PyInstaller --onefile --noconsole --hidden-import=cv2 --hidden-import=numpy --hidden-import=cv2.VideoCapture --collect-all imageio --collect-all moviepy Stager_PixelCode_To_Payload.py
