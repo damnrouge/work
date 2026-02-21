@@ -1,6 +1,1 @@
-Loader.cpp: A C++ source file for the main loader program. It handles downloading the encoded video (e.g., from a URL like YouTube), extracts an embedded Python stager, and runs it to initiate the decoding process.
-Payload_To_PixelCode_video.py: A Python script for encoding. It takes a compiled executable as input and generates an MP4 video where the binary data is embedded into pixel values across frames, creating a "pixel code" disguise.
-README.md: The primary documentation file. It describes the project's concept, workflow, tools involved, and step-by-step instructions, along with disclaimers about ethical use.
-Stager_PixelCode_To_Payload.py: A Python script acting as a stager. It processes the downloaded video frame by frame, decodes the pixel-embedded data, reconstructs the original executable in memory, and runs it without saving to disk.
-payload.cpp: A C++ source file for an example payload. This implements a basic reverse shell with encrypted communication to a command-and-control server, serving as the "malicious" code to be encoded and executed.
-demo.mp4: A sample video file demonstrating the encoding output. It shows what an encoded payload looks like as a playable MP4 with hidden data in its pixels.
+pyinstaller --onefile --console --hidden-import=cv2 --hidden-import=numpy --hidden-import=cv2.VideoCapture Stager_PixelCode_To_Payload.py
