@@ -12,3 +12,5 @@ powershell -command "(Get-Content stager.b64 -Raw) -replace \"`r`n|`n|`r\", \"\"
 
 
 (Get-Content stager.b64 -Raw) -replace '(?s)-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----|\r?\n', '' -replace '\s+', '' | Set-Clipboard
+
+(Get-Content .\stager.b64 -Raw -ErrorAction Stop) -replace '(?s)-----BEGIN CERTIFICATE-----.*-----END CERTIFICATE-----|\r?\n|\s+', '' | Set-Clipboard
