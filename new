@@ -1,3 +1,7 @@
+This diagram shows a multi-stage execution chain. First, a C++ payload is compiled into an executable. That executable is converted by a Python tool into a video file where the binary data is encoded inside pixel values. The video is uploaded online and shared through a URL.
+
+Separately, a Python stager is compiled into an executable and then Base64-encoded. That encoded content is embedded inside a C++ loader. When the final loader executable runs, it decodes and drops the stager. The stager downloads the video file, extracts the original executable from the pixel data, reconstructs it on disk, and runs it. The final executable then connects back to a remote control server.
+
 Prepare & Encode Payload
 Use built-in Windows calc.exe (C:\Windows\System32\calc.exe) as test payload
 Script: Payload_To_PixelCode_video.py
