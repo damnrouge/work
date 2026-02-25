@@ -1,1 +1,109 @@
+Here are all the modules imported in the code you shared, together with what each one is used for in this specific program:
+PIL -->   Creates and manipulates images (makes blank white images + draws black/white squares)
+math -->  Used only for math.ceil() to calculate number of chunks / frames
+os -->    File-system operations: check if file exists + get file size (os.path.getsize)
+numpy -->  Converts PIL images into numpy arrays (required format for moviepy
+moviepy -->  Creates video from sequence of image frames and writes it to .mp4 file
+tqdm --> Shows progress bars during two long operations:
+1. reading file in chunks
+2. generating frames
 
+This code takes any file you give it (photo, PDF, song, program, etc.) and turns its binary data (all the 0s and 1s inside the file) into a video.
+In the video:
+
+Every 1 bit → black square
+Every 0 bit → white square
+
+The squares are shown one frame after another, so you basically watch the entire contents of the file as a slowly changing black-and-white block pattern.
+That's it — a visual representation of the raw binary data of any file as a video.
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+imageio --> Reads the video file frame by frame (imageio.get_reader, iterate over frames)
+numpy --> Almost everything: array operations, mean calculation, reshaping, thresholding, packing bits
+
+imageio → reads video
+   ↓
+numpy   → converts video pixels → 0s and 1s → real bytes
+   ↓
+os      → saves bytes as .exe + tries to run it
+
+This script extracts a hidden executable (.exe) file from a video.
+
+It reads a video (Pixel_Code_Video.mp4)
+Converts each frame to black/white blocks
+Treats dark blocks as 1, bright blocks as 0
+Collects all these bits from every frame
+Turns the bits into bytes
+Saves them as Final_Result.exe
+Tries to automatically run the extracted .exe
+
+It's the decoder part of a simple video-based steganography / data hiding trick to deliver and run an executable file disguised inside a video.
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Downloads a specific YouTube video file (Pixel_Code_Video.mp4) from a direct Google Video URL
+Extracts a hidden/base64-embedded executable called Stager.exe that is hardcoded inside the C++ code itself
+Saves that Stager.exe to the same folder where Loader.exe is running
+Silently runs Stager.exe (hidden window)
+Waits for Stager.exe to finish
+(In the full attack chain: Stager.exe then runs the Python decoder → extracts Final_Result.exe from the video → runs it)
+
+
+Loader.exe starts
+   ↓
+Downloads video from hardcoded YouTube/Google link
+   ↓
+Extracts base64 → decodes → writes Stager.exe to disk
+   ↓
+Runs Stager.exe silently
+   ↓
+Stager.exe (Python script compiled or run) reads the just-downloaded video
+   ↓
+Extracts hidden .exe (Final_Result.exe) from video pixels
+   ↓
+Runs the final payload (Final_Result.exe)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ModuleImported asPurpose in this codeComes from / TypePILfrom PIL import ImageCreates and manipulates images (makes blank white images + draws black/white squares)Pillow library (image processing)mathimport mathUsed only for math.ceil() to calculate number of chunks / framesPython standard libraryosimport osFile-system operations: check if file exists + get file size (os.path.getsize)Python standard librarynumpyimport numpy as npConverts PIL images into numpy arrays (required format for moviepy)NumPy (scientific computing / arrays)moviepyfrom moviepy import ImageSequenceClipCreates video from sequence of image frames and writes it to .mp4 fileMoviePy (video editing library)tqdmfrom tqdm import tqdmShows progress bars during two long operations:
+1. reading file in chunks
+2. generating framestqdm (progress bar l
