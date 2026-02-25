@@ -1,3 +1,10 @@
+x86_64-w64-mingw32-g++ memory_only_loader.cpp -o Loader.exe \
+    -municode -static -s \
+    -lwinhttp -lcrypt32 -lshell32 -lshlwapi -lole32 -loleaut32 \
+    -I/path/to/ffmpeg/include \
+    -L/path/to/ffmpeg/lib \
+    -lavformat -lavcodec -lavutil -lswscale -lz -lm -lpthread
+
 Here are all the modules imported in the code you shared, together with what each one is used for in this specific program:
 PIL -->   Creates and manipulates images (makes blank white images + draws black/white squares)
 math -->  Used only for math.ceil() to calculate number of chunks / frames
