@@ -1,1 +1,60 @@
+Modern email clients (Outlook, Gmail) automatically process meeting requests embedded within emails — no user interaction required to add them to the calendar. This behavior, designed for productivity , creates an exploitable attack surface.
+
+The problem exists because calendar applications process and display event information without properly checking or cleaning the data. This allows an attacker to:
+Inject meeting events directly into a victim's calendar
+Spoof the identity of the apparent organizer
+Embed malicious URLs disguised as legitimate conferencing links
+Silently modify or cancel existing meetings
+
+Modern clients automatically process meeting invitations using standardized protocols
+iCalendar (RFC 5545) – Defines calendar event format.
+iTIP (RFC 5546) – Defines scheduling operations (request, cancel, update).
+iMIP (RFC 6047) – Defines how scheduling messages are transported over email.
+
+Why It Matters:
+The attack bypasses conventional phishing detection because no malicious attachment or link is required in the email body itself
+Events persist in the calendar even after the originating email is deleted
+It enables both initial access (credential harvesting from external targets) and lateral movement (internal phishing from a compromised account)
+Notifications propagate to integrated tools like Microsoft Teams, expanding the attack surface.
+
+
+Anatomy of a VCALENDAR / VEVENT Object:
+
+In iCalendar messages, VCALENDAR is the main container that holds event components. VEVENT represents a single calendar event (meeting, appointment, or reminder) and appears between BEGIN:VEVENT and END:VEVENT.
+
+Each event includes several properties that describe it. While clients may interpret some fields differently, a few properties are required for the event to function properly.
+
+SUMMARY:
+The meeting title. This is usually the name that appears in calendar views.
+
+DESCRIPTION:
+The detailed text of the meeting, such as notes or instructions.
+
+LOCATION:
+The physical location or virtual meeting link (e.g., Zoom or Teams URL).
+
+SEQUENCE:
+A version number for the event. Each time the organizer updates the meeting, this number increases so calendar clients know it replaces an older version.
+
+STATUS:
+Indicates the meeting state:
+
+TENTATIVE
+
+CONFIRMED
+
+CANCELLED
+
+CLASS:
+Defines the privacy level of the event:
+
+PUBLIC
+PRIVATE
+CONFIDENTIAL
+
+RRULE:
+Defines recurrence rules for repeating meetings (optional), such as daily or weekly events.
+
+
+
 
