@@ -24,37 +24,29 @@ In iCalendar messages, VCALENDAR is the main container that holds event componen
 
 Each event includes several properties that describe it. While clients may interpret some fields differently, a few properties are required for the event to function properly.
 
-SUMMARY:
-The meeting title. This is usually the name that appears in calendar views.
+UID (Unique Identifier): The most important field. It uniquely identifies the event across updates, reschedules, cancellations, or transfers between systems. Mail clients use it to match incoming REQUEST or CANCEL messages to existing calendar entries.
 
-DESCRIPTION:
-The detailed text of the meeting, such as notes or instructions.
+DTSTAMP: A timestamp showing when the event object was created by the organizer’s system.
 
-LOCATION:
-The physical location or virtual meeting link (e.g., Zoom or Teams URL).
+DTSTART / DTEND: The start and end time/date of the event. Values may be floating, UTC, or linked to a VTIMEZONE definition within the VCALENDAR.
 
-SEQUENCE:
-A version number for the event. Each time the organizer updates the meeting, this number increases so calendar clients know it replaces an older version.
+ORGANIZER: Identifies the person responsible for creating or managing the event.
 
-STATUS:
-Indicates the meeting state:
+ATTENDEE(S): Lists the participants invited to the event.
 
-TENTATIVE
+SUMMARY: The title of the event. This is usually the meeting name visible in calendar clients.
 
-CONFIRMED
+DESCRIPTION: The body text of the event, such as meeting notes or additional details.
 
-CANCELLED
+LOCATION: The venue, meeting room, or virtual meeting URL.
 
-CLASS:
-Defines the privacy level of the event:
+SEQUENCE: A positive integer indicating the version of the event. Each time the organizer sends an update, the value increases so clients know it replaces a previous version.
 
-PUBLIC
-PRIVATE
-CONFIDENTIAL
+STATUS: Indicates the event state: TENTATIVE, CONFIRMED, or CANCELLED.
 
-RRULE:
-Defines recurrence rules for repeating meetings (optional), such as daily or weekly events.
+CLASS: Defines the access level of the event: PUBLIC, PRIVATE, or CONFIDENTIAL.
 
+RRULE: Recurrence rules for repeating meetings (optional).
 
 
 
