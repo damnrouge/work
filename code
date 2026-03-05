@@ -1,1 +1,9 @@
-aaa
+index=email sourcetype="proofpoint:tap:messages:*"
+| search attachment_mime_type="text/calendar" OR header_content_type="text/calendar"
+| rex field=raw_header "ORGANIZER[^:]*:mailto:(?<cal_organizer>[^\s\r\n;\"]+)"
+| eval sender_domain=lower(replace(sender,".*@",""))
+| eval org_domain=lower(replace(cal_organizer,".*@",""))
+| where isnotnull(cal_organizer)
+| where sender_domain != org_domain
+| table _time, sender, sender_domain, cal_organizer, org_domain, recipients, subject
+| sort -_time
