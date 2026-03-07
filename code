@@ -1,1 +1,1 @@
-aaa
+Akamai Technologies Cloud Monitor logs record each HTTP request processed at the Akamai edge, including client details, requested URL, response status, cache result, TLS information, and request performance metrics.
