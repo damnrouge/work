@@ -39,4 +39,18 @@ SEQUENCE 0 → 1 — Outlook only accepts an update if incoming SEQUENCE is high
 DTSTAMP → later timestamp — Outlook validates timestamp alongside SEQUENCE. Same or earlier timestamp gets rejected even if SEQUENCE is correct.
 URL :8000 → :8080 — Silently swaps the phishing destination. Same meeting, same button, different landing page. Victim has no way of knowing the link changed.
 
-The attacker sends a legitimate-looking meeting invite that auto-appears in user's calendar, and repeats it a couple of times with harmless content to build trust making user comfortable clicking the Join button without hesitation. On the final update the attacker silently swaps the meeting URL to a credential harvesting page using the same UID and an incremented SEQUENCE, and when user clicks Join out of habit he unknowingly hands over his corporate credentials.
+The attacker sends a legitimate-looking meeting invite that auto-appears in user's calendar, and repeats it a couple of times with harmless content to build trust making user comfortable clicking the Join button without hesitation
+. On the final update the attacker silently swaps the meeting URL to a credential harvesting page using the same UID and an incremented SEQUENCE, and when user clicks Join out of habit he unknowingly hands over his corporate credentials.
+
+
+
+Attacker compromises a user mailbox or gets forwarded a meeting invite
+Opens raw email source and extracts UID and SEQUENCE of an existing meeting
+Crafts a new ICS file with the same UID, SEQUENCE+1, and a phishing URL replacing the legitimate join link
+Sends the ICS to all meeting attendees spoofing the original organizer
+Outlook sees the same UID and higher SEQUENCE — silently overwrites the existing calendar event on every attendee's device
+Update email automatically moves to Trash — no attendee ever sees it
+Meeting looks completely identical — same title, same organizer, same time
+Attendee clicks Join out of habit — lands on phishing page
+Credentials captured — no malware, no exploit, no alert fired
+One compromised mailbox → one UID → every attendee on that meeting compromised simultaneously
