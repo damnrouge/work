@@ -38,3 +38,5 @@ Naveen never clicked anything. He never accepted anything. He never saw any noti
 SEQUENCE 0 → 1 — Outlook only accepts an update if incoming SEQUENCE is higher than stored. This tells Outlook this is a newer version — replace what you have.
 DTSTAMP → later timestamp — Outlook validates timestamp alongside SEQUENCE. Same or earlier timestamp gets rejected even if SEQUENCE is correct.
 URL :8000 → :8080 — Silently swaps the phishing destination. Same meeting, same button, different landing page. Victim has no way of knowing the link changed.
+
+The attacker sends a legitimate-looking meeting invite that auto-appears in user's calendar, and repeats it a couple of times with harmless content to build trust making user comfortable clicking the Join button without hesitation. On the final update the attacker silently swaps the meeting URL to a credential harvesting page using the same UID and an incremented SEQUENCE, and when user clicks Join out of habit he unknowingly hands over his corporate credentials.
