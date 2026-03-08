@@ -12,3 +12,5 @@ Tools :
 o365 and Proofpoint accepting the GAP
 https://www.proofpoint.com/us/blog/email-and-cloud-threats/threat-actors-engineer-attacks-to-evade-email-security
 https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/strengthening-calendar-security-through-enhanced-remediation/4456876
+
+The ICS file is set with METHOD=REQUEST, ORGANIZER=Threatinformeddefence@syf.com, ATTENDEE=venkatanaveenkumar.vegireddi@syf.com, X-MICROSOFT-SKYPETEAMSMEETINGURL=http://192.168.0.106:8000, X-MICROSOFT-ISRESPONSEREQUESTED=FALSE, RRULE=FREQ:DAILY;COUNT:2, UID=040000008200E00074C5B7101A82E008...2D5B71, SEQUENCE=0, STATUS=CONFIRMED and DTSTAMP=20260308T091500Z
