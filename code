@@ -1,1 +1,14 @@
-Akamai Technologies Cloud Monitor logs record each HTTP request processed at the Akamai edge, including client details, requested URL, response status, cache result, TLS information, and request performance metrics.
+The Four Core Attack Techniques
+1. Spoofed Initial Invitation
+Send a METHOD:REQUEST email from an external account with ORGANIZER set to a trusted internal identity. Event auto-appears in victim's calendar and Teams. Victim clicks the meeting link → lands on credential harvesting page.
+2. UID Hijacking of Existing Meetings (Lateral Movement)
+Post-compromise: read victim's inbox to extract an existing meeting's UID and SEQUENCE. Send a REQUEST update with SEQUENCE+1 — Outlook silently overwrites the original event with attacker-controlled content. The update email is automatically stacked into the existing conversation thread in Trash — nearly invisible.
+3. Cancellation-Based Cleanup
+Send METHOD:CANCEL with the correct UID — the event disappears from the victim's calendar and the original invite email is moved to Trash. Clean opsec with no manual intervention required.
+4. Direct Calendar Injection (No Email Sent)
+Using Graph API or CalDAV, write a calendar event directly to a target's mailbox without sending any email. Proofpoint and all email gateways have zero visibility into this — it never touches the email transport layer.
+
+Tools :
+o365 and Proofpoint accepting the GAP
+https://www.proofpoint.com/us/blog/email-and-cloud-threats/threat-actors-engineer-attacks-to-evade-email-security
+https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/strengthening-calendar-security-through-enhanced-remediation/4456876
