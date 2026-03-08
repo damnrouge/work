@@ -14,3 +14,20 @@ https://www.proofpoint.com/us/blog/email-and-cloud-threats/threat-actors-enginee
 https://techcommunity.microsoft.com/blog/microsoftdefenderforoffice365blog/strengthening-calendar-security-through-enhanced-remediation/4456876
 
 The ICS file is set with METHOD=REQUEST, ORGANIZER=Threatinformeddefence@syf.com, ATTENDEE=venkatanaveenkumar.vegireddi@syf.com, X-MICROSOFT-SKYPETEAMSMEETINGURL=http://192.168.0.106:8000, X-MICROSOFT-ISRESPONSEREQUESTED=FALSE, RRULE=FREQ:DAILY;COUNT:2, UID=040000008200E00074C5B7101A82E008...2D5B71, SEQUENCE=0, STATUS=CONFIRMED and DTSTAMP=20260308T091500Z
+
+
+We sent an email with an ICS file attached. That email carried a meeting invite with a phishing link at :8000 hidden behind a "Join Microsoft Teams Meeting" button. The moment the email landed in Naveen's inbox, Outlook automatically added the meeting to his calendar — without him clicking anything.
+
+We are sending another email with a new ICS file — but this time we are not creating a new meeting. We are modifying the existing one that is already sitting in Naveen's calendar.
+To do that we keep the UID exactly the same — this tells Outlook "this is not a new meeting, this is an update to a meeting you already have."
+
+We are modifying SEQUENCE from 0 to 1
+Because Outlook only accepts an update if the incoming SEQUENCE is higher than what it already stored. This tells Outlook "this is a newer version — replace what you have."
+
+We are modifying DTSTAMP from 20260308T091500Z to 20260308T100000Z
+Because Outlook validates the timestamp alongside SEQUENCE to confirm the update is genuinely newer. Same or earlier timestamp gets rejected even if SEQUENCE is correct.
+
+We are modifying X-MICROSOFT-SKYPETEAMSMEETINGURL from :8000 to :8080
+Because this is the hidden header powering the "Join Teams Meeting" button. By changing the port the phishing destination silently swaps to :8080 — same meeting, same button, different landing page — victim has no way of knowing the link changed.
+
+Naveen never clicked anything. He never accepted anything. He never saw any notification. His calendar was updated entirely without his knowledge or intention — purely because Outlook trusts the UID and SEQUENCE mechanism by design.
