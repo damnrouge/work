@@ -31,3 +31,10 @@ We are modifying X-MICROSOFT-SKYPETEAMSMEETINGURL from :8000 to :8080
 Because this is the hidden header powering the "Join Teams Meeting" button. By changing the port the phishing destination silently swaps to :8080 — same meeting, same button, different landing page — victim has no way of knowing the link changed.
 
 Naveen never clicked anything. He never accepted anything. He never saw any notification. His calendar was updated entirely without his knowledge or intention — purely because Outlook trusts the UID and SEQUENCE mechanism by design.
+
+
+
+
+SEQUENCE 0 → 1 — Outlook only accepts an update if incoming SEQUENCE is higher than stored. This tells Outlook this is a newer version — replace what you have.
+DTSTAMP → later timestamp — Outlook validates timestamp alongside SEQUENCE. Same or earlier timestamp gets rejected even if SEQUENCE is correct.
+URL :8000 → :8080 — Silently swaps the phishing destination. Same meeting, same button, different landing page. Victim has no way of knowing the link changed.
