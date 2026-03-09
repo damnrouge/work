@@ -1,1 +1,79 @@
-We are sending a cancellation ICS with the same UID but METHOD:CANCEL, STATUS:CANCELLED, and SEQUENCE:2 which tells Outlook to silently remove the existing meeting from the victim's calendar entirely — wiping all evidence of the attack.
+2. SEC699 — Advanced Purple Teaming: Adversary Emulation & Detection Engineering
+Certification: GIAC Purple Team (GPTE)
+SEC699 delivers cutting-edge purple team training, immersing IT security professionals in advanced adversary emulation techniques across dynamic enterprise environments. With 60% hands-on lab time, students develop skills in automation, tooling, planning, and executing complex adversary scenarios using tools like Covenant and Caldera. SANS Institute
+Highlights include building adversary emulation plans that mimic real-life threat actors such as APT-28, APT-34, and Turla, and deploying full multi-domain enterprise environments for adversary emulation using Ansible, Docker, and Terraform. Contentstack
+
+🔗 sans.org/cyber-security-courses/purple-team-tactics-adversary-emulation
+💰 ~$8,275 USD (Live/Online)
+
+
+DetailInfoQuestions~75 questionsDuration2 hoursPassing Score~70%FormatProctored, open-book (printed notes only)Validity4 yearsExam Fee~$979 USD (standalone)Renewal Fee~$499 USD + 36 CPEs
+
+🗂️ Core Exam Domains
+SEC699 structures content into five progressive sections, which map directly to the GPTE exam domains: SANS Institute
+
+Section 1 — Purple Team Foundations & Tooling
+Section one lays the foundational requirements for successful adversary emulation and purple teaming. Since SEC699 is an advanced course, it goes in-depth on several key tools and teaches students how to further extend and customize them for real-world use. SANS Institute
+Topics covered:
+
+Purple team methodology and program design
+Adversary emulation frameworks (MITRE ATT&CK, TIBER, CBEST)
+C2 frameworks: Covenant and Caldera (setup, configuration, plugin development)
+Building adversary emulation infrastructure with Ansible, Docker, Terraform
+Extending and customizing offensive tooling
+
+
+Section 2 — Initial Access Techniques & Detection
+The course teaches students to execute complex initial access techniques with a strong emphasis on their corresponding detection strategies. SANS Institute
+Topics covered:
+
+Phishing and spear-phishing emulation
+Application whitelisting bypasses
+Macro-based and fileless malware delivery
+OPSEC-aware payload staging
+Email gateway and EDR detection logic
+SIGMA rule writing for initial access TTPs
+
+
+Section 3 — Lateral Movement & Privilege Escalation
+Section three covers lateral movement and privilege escalation techniques in depth, paired with detection strategies for each method. SANS Institute
+Topics covered:
+
+Pass-the-Hash / Pass-the-Ticket
+Kerberoasting & AS-REP Roasting
+Token impersonation and credential theft
+Cross-forest attacks (Kerberos delegation abuse)
+Active Directory misconfigurations and ACL abuse
+Detection via Windows Event Logs, Sysmon, and EDR telemetry
+
+
+Section 4 — Persistence, Exfiltration & Stealth Techniques
+The course covers delivering advanced attacks including application whitelisting bypasses, cross-forest attacks (abusing delegation), and stealth persistence strategies. Contentstack
+Topics covered:
+
+Registry, scheduled task, and WMI-based persistence
+DLL hijacking and COM hijacking
+C2 channel obfuscation and HTTPS beaconing
+Data staging and exfiltration techniques
+Defense evasion: AMSI bypass, ETW tampering, log clearing
+
+
+Section 5 — Threat Actor Emulation Plans & Detection Engineering
+Building SIGMA rules to detect advanced adversary techniques is a key capstone skill tested in the exam. Contentstack The detection cycle is circular, accounting for alert verification, alert bypass, false-positive tuning, and procedural variance testing — all of which are exam-relevant skills. SANS Institute
+Topics covered:
+
+Building full adversary emulation plans (APT-28, APT-34, Turla, etc.)
+MITRE ATT&CK Navigator mapping and gap analysis
+Detection-as-code and SIGMA rule authoring
+Measuring detection coverage and security control validation
+Purple team reporting and feedback loops to blue team
+Using Caldera to automate and repeat emulation campaigns
+
+
+🛠️ Key Tools You're Expected to Know
+SEC699 immerses students in adversary emulation using tools like Covenant and Caldera, with 60% of course time being hands-on lab work across 29 labs. Contentstack
+The exam expects hands-on familiarity with: Covenant C2, Caldera, SIGMA rules, Sysmon, MITRE ATT&CK Navigator, Atomic Red Team, Ansible/Terraform for range deployment, and Windows AD attack tooling (Rubeus, BloodHound, Mimikatz context).
+
+👤 Who Is It For?
+SEC699 is designed for IT security professionals who want to develop skills in automation, tooling, planning, and executing complex adversary scenarios, progressively building expertise from foundational concepts to intricate purple team techniques, culminating in comprehensive threat actor emulation plans. Contentstack
+Ideal candidates: SOC analysts, red teamers, detection engineers, incident responders, and threat hunters who already have foundational offensive/defensive experience (SEC599/GDAT is a natural prerequisite).
