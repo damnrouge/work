@@ -1,1 +1,1 @@
-aaa
+We are sending a cancellation ICS with the same UID but METHOD:CANCEL, STATUS:CANCELLED, and SEQUENCE:2 which tells Outlook to silently remove the existing meeting from the victim's calendar entirely — wiping all evidence of the attack.
