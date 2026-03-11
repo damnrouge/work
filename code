@@ -52,10 +52,18 @@
  *   unrelated to the technique — which would pollute your results.
  */
 
+#define WIN32_NO_STATUS     /* prevent windows.h defining conflicting status codes */
 #include <windows.h>
-#include <ntsecapi.h>
+#undef WIN32_NO_STATUS      /* re-enable so ntstatus.h defines STATUS_* correctly */
+#include <ntstatus.h>       /* STATUS_SUCCESS and all NT status codes */
+#include <ntsecapi.h>       /* LSA API: LsaRegisterLogonProcess etc. */
 #include <stdio.h>
 #include <wchar.h>
+
+/* MinGW fallback: if ntstatus.h still didn't define STATUS_SUCCESS */
+#ifndef STATUS_SUCCESS
+#define STATUS_SUCCESS ((NTSTATUS)0x00000000L)
+#endif
 
 /* -----------------------------------------------------------------------
  * Undocumented MSV1_0 message class for credential key extraction.
