@@ -1,1 +1,1 @@
-Hunt for calendar entries that were created from emails flagged or quarantined by email security — where the meeting still landed in the calendar despite the mail never reaching the inbox.
+Also, building detections for these events is particularly challenging — the content inside the .ics file, including embedded URLs and phone numbers, is not surfaced in the O365 audit logs, making it impossible to inspect what was written into the calendar entry without additional tooling.
