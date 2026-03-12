@@ -1,39 +1,21 @@
 index=proofpoint sourcetype=pps_messagelog
 | where mvfind('msgParts{}.detectedExt',"(?i)^ICS$") >= 0
       OR mvfind('msgParts{}.detectedMime',"(?i)text/calendar") >= 0
-| where 'filter.modules.urldefense.counts.rewritten' > 0
-      OR 'filter.modules.urldefense.counts.total' > 0
-| eval clean_msgid=lower(replace('message_id',"[<>]",""))
-| rename clean_msgid as join_key
-| join type=inner join_key [
-    search index=o365 sourcetype="o365:management:activity"
-    Workload=Exchange command=Create
-    object_category=meeting
-    | eval clean_msgid=lower(replace('Item.InternetMessageId',"[<>]",""))
-    | rename clean_msgid as join_key
-    | eval o365_time=_time
-    | table join_key, o365_time, object,
-            object_category, MailboxOwnerUPN,
-            ClientInfoString, ExternalAccess,
-            'Item.Attachments', src_ip]
-| eval recipient=mvindex('envelope.rcpts{}',0)
+| where 'filter.modules.urldefense.counts.total' > 0
 | eval rewritten_url=mvindex('msgParts{}.textExtracted',0)
 | where NOT match(lower(rewritten_url),
         "(?i)teams\.microsoft\.com|zoom\.us|webex\.com|meet\.google\.com|gotomeeting\.com|skype\.com|bluejeans\.com|chime\.aws|whereby\.com|ringcentral\.com")
-| table _time,
+| eval recipient=mvindex('envelope.rcpts{}',0)
+| table _time, action,
         'envelope.from',
         recipient,
         'msg.normalizedHeader.subject{}',
-        action,
         'msgParts{}.detectedName',
         'msgParts{}.detectedMime',
+        rewritten_url,
         'filter.modules.urldefense.counts.total',
         'filter.modules.urldefense.counts.rewritten',
         'filter.modules.urldefense.counts.unrewritten',
-        o365_time,
-        object,
-        MailboxOwnerUPN,
-        ExternalAccess,
         'connection.ip',
         'connection.country',
         'filter.modules.dmarc.filterdResult',
