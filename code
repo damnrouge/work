@@ -1,21 +1,28 @@
 index=proofpoint sourcetype=pps_messagelog
 | where mvfind('msgParts{}.detectedExt',"(?i)^ICS$") >= 0
       OR mvfind('msgParts{}.detectedMime',"(?i)text/calendar") >= 0
-| eval all_urls=split('filter.modules.urldefense.url'," ")
-| mvexpand all_urls
-| where len(all_urls) > 0
-| where match(all_urls,"(?i)^http")
-| where NOT match(lower(all_urls),
-        "(?i)teams\.microsoft\.com|zoom\.us|webex\.com|meet\.google\.com|gotomeeting\.com|skype\.com|bluejeans\.com|chime\.aws|whereby\.com|ringcentral\.com")
+| where mvcount('msgParts{}.urls{}.url') > 0
 | eval recipient=mvindex('envelope.rcpts{}',0)
+| eval subject=mvindex('msg.normalizedHeader.subject{}',0)
+| mvexpand 'msgParts{}.urls{}.url'
+| rename 'msgParts{}.urls{}.url' as url
+| where NOT match(lower(url),
+        "(?i)^mailto:|teams\.microsoft\.com|zoom\.us|webex\.com|meet\.google\.com|gotomeeting\.com|skype\.com|bluejeans\.com|chime\.aws|whereby\.com|ringcentral\.com")
 | table _time, action,
         'envelope.from',
         recipient,
-        'msg.normalizedHeader.subject{}',
-        'msgParts{}.detectedName',
-        all_urls,
+        subject,
+        url,
         'connection.ip',
         'connection.country',
         'filter.modules.dmarc.filterdResult',
         'filter.modules.spf.result'
-| sort -_time
+| sort _time, url
+```
+
+---
+
+Only one line changed:
+```
+Before:  "(?i)teams\.microsoft\.com|zoom\.us ...
+After:   "(?i)^mailto:|teams\.microsoft\.com|zoom\.us ...
