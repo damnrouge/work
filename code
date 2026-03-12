@@ -1,3 +1,147 @@
+============================================================
+SPLUNK INVESTIGATION QUERIES - ICS PHISHING DETECTION
+Proofpoint TAP + O365 Correlation
+============================================================
+
+OBJECTIVE:
+Detect blocked emails with calendar (.ics) attachments from Proofpoint
+and correlate them with subsequent O365 Exchange activity by the same
+user within 30 minutes — a potential indicator of calendar phishing.
+
+------------------------------------------------------------
+QUERY 1 — ORIGINAL DETECTION QUERY (Had Zero Results)
+------------------------------------------------------------
+PURPOSE:
+The original query attempting to correlate blocked .ics emails in
+Proofpoint with meeting creation events in O365. Returned zero results
+due to: (1) mvindex only grabbing index 0 of messageParts, missing .ics
+attachments at other indices, and (2) object_category=meeting not
+existing in the O365 data.
+
+index=proofpoint sourcetype=proofpoint_tap_siem
+eventType=messagesBlocked
+| eval attachment=mvindex('messageParts{}.filename',0)
+| where match(attachment,"(?i)\.ics$")
+    OR match('messageParts{}.contentType',"(?i)text/calendar")
+| rename recpt as affected_user
+| join type=inner affected_user [
+    search index=o365 sourcetype="o365:management:activity"
+    Workload=Exchange
+    command=Create object_category=meeting
+    | rename user as affected_user
+    | eval o365_time=_time
+    | table affected_user, o365_time, object,
+            object_category, owner, src_ip]
+| eval time_gap_mins=round((o365_time-_time)/60,1)
+| where time_gap_mins >= 0
+    AND time_gap_mins < 30
+| table _time, affected_user, subject,
+        action, attachment, o365_time,
+        object, object_category, time_gap_mins
+| sort time_gap_mins
+
+
+------------------------------------------------------------
+QUERY 2 — DIAGNOSE PROOFPOINT ATTACHMENT FIELD
+------------------------------------------------------------
+PURPOSE:
+Check what filenames are actually stored in messageParts{}.filename
+across all Proofpoint blocked messages. Revealed that .ics files
+were stored at different multivalue indices (not always index 0),
+and some were logged as "ical.txt" or "text-calendar" instead of
+"invite.ics". Using mvindex(...,0) was only grabbing the first part
+(usually "text.html"), missing the actual attachment.
+
+index=proofpoint sourcetype=proofpoint_tap_siem eventType=messagesBlocked
+| eval attachment=mvindex('messageParts{}.filename',0)
+| stats count by attachment
+| sort -count
+
+
+------------------------------------------------------------
+QUERY 3 — DIAGNOSE PROOFPOINT CONTENT TYPE FIELD
+------------------------------------------------------------
+PURPOSE:
+Check what content types are stored in messageParts{}.contentType
+to understand how calendar content is identified in Proofpoint TAP logs.
+
+index=proofpoint sourcetype=proofpoint_tap_siem eventType=messagesBlocked
+| eval ct=mvindex('messageParts{}.contentType',0)
+| stats count by ct
+| sort -count
+
+
+------------------------------------------------------------
+QUERY 4 — DIAGNOSE O365 OBJECT_CATEGORY FIELD
+------------------------------------------------------------
+PURPOSE:
+Check what values exist in object_category for O365 Exchange Create
+operations. Revealed that object_category only contains "mail" —
+the value "meeting" does not exist, which was causing zero results
+in the join.
+
+index=o365 sourcetype="o365:management:activity" Workload=Exchange command=Create
+| stats values(object_category) ``object_category=meeting``
+
+
+------------------------------------------------------------
+QUERY 5 — DISCOVER O365 OPERATIONS
+------------------------------------------------------------
+PURPOSE:
+List all Operation values in O365 Exchange audit logs to understand
+what actions are actually being logged. Also revealed that the correct
+field name is "Operation" not "command". Key operations found include:
+MailItemsAccessed, AttachmentAccess, MoveToDeletedItems, SoftDelete,
+Update, Create, Send, HardDelete, UpdateInboxRules, SendAs, etc.
+
+index=o365 sourcetype="o365:management:activity" Workload=Exchange
+| stats count by Operation
+| sort -count
+
+
+------------------------------------------------------------
+QUERY 6 — IDENTIFY O365 USER FIELD NAME
+------------------------------------------------------------
+PURPOSE:
+Confirm the correct field name for the user/actor in O365 audit logs
+to use in the join. Revealed that "user" is the correct field
+(not "UserId" which was empty), and emails are in
+Firstname.Lastname@syf.com format.
+
+index=o365 sourcetype="o365:management:activity" Workload=Exchange Operation=Create
+| head 1
+| table UserId, user, Actor, ObjectId
+
+
+------------------------------------------------------------
+QUERY 7 — VERIFY PROOFPOINT RECIPIENT FORMAT
+------------------------------------------------------------
+PURPOSE:
+Confirm the exact email format used in Proofpoint recipient fields
+before running the join. Critical to ensure both datasets use the
+same email format (e.g., firstname.lastname@syf.com) otherwise the
+inner join will silently return zero results.
+
+index=proofpoint sourcetype=proofpoint_tap_siem eventType=messagesBlocked
+| eval ics_idx=mvfind('messageParts{}.filename',"(?i)(\.ics$|ical)")
+| where isnotnull(ics_idx)
+| stats count by recpt
+| head 20
+
+
+------------------------------------------------------------
+QUERY 8 — FINAL CORRECTED DETECTION QUERY
+------------------------------------------------------------
+PURPOSE:
+The fully corrected version of the original detection query.
+Key fixes applied:
+  - Used mvfind() instead of mvindex(...,0) to search ALL indices
+    of the multivalue messageParts field for .ics/ical filenames
+  - Removed object_category=meeting (field value doesn't exist)
+  - Changed "command" to "Operation" (correct O365 field name)
+  - Changed "user as affected_user" confirmed as correct join field
+  - Added ClientIP and ObjectId to output for richer context
+
 index=proofpoint sourcetype=proofpoint_tap_siem eventType=messagesBlocked
 | eval ics_idx=mvfind('messageParts{}.filename',"(?i)(\.ics$|ical)")
 | eval cal_idx=mvfind('messageParts{}.contentType',"(?i)text/calendar")
@@ -11,5 +155,27 @@ index=proofpoint sourcetype=proofpoint_tap_siem eventType=messagesBlocked
     | table affected_user, o365_time, Operation, ClientIP, ObjectId]
 | eval time_gap_mins=round((o365_time-_time)/60,1)
 | where time_gap_mins >= 0 AND time_gap_mins < 30
-| table _time, affected_user, subject, o365_time, Operation, ClientIP, ObjectId, time_gap_mins
+| table _time, affected_user, subject, o365_time,
+        Operation, ClientIP, ObjectId, time_gap_mins
 | sort time_gap_mins
+
+
+============================================================
+SUMMARY OF ROOT CAUSES FOR ZERO RESULTS
+============================================================
+
+1. mvindex('messageParts{}.filename',0) only grabbed the FIRST part
+   of the multivalue field (usually text.html), missing .ics files
+   stored at other indices. Fix: use mvfind() to search all indices.
+
+2. object_category=meeting does not exist in O365 data.
+   Only value present is "mail". Filter was silently dropping all results.
+
+3. Field name "command" is incorrect for O365 audit logs.
+   Correct field name is "Operation".
+
+4. userId field is empty in O365 logs. Correct join field is "user".
+
+============================================================
+END OF FILE
+============================================================
