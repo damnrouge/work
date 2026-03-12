@@ -2,21 +2,17 @@ index=proofpoint sourcetype=pps_messagelog
 | where mvfind('msgParts{}.detectedExt',"(?i)^ICS$") >= 0
       OR mvfind('msgParts{}.detectedMime',"(?i)text/calendar") >= 0
 | where mvcount('msgParts{}.urls{}.url') > 0
-| eval all_urls=mvjoin('msgParts{}.urls{}.url',chr(10))
-| where NOT match(lower(all_urls),
+| mvexpand 'msgParts{}.urls{}.url'
+| rename 'msgParts{}.urls{}.url' as url
+| where NOT match(lower(url),
         "(?i)teams\.microsoft\.com|zoom\.us|webex\.com|meet\.google\.com|gotomeeting\.com|skype\.com|bluejeans\.com|chime\.aws|whereby\.com|ringcentral\.com")
-| where len(all_urls) > 0
 | eval recipient=mvindex('envelope.rcpts{}',0)
 | table _time, action,
         'envelope.from',
         recipient,
         'msg.normalizedHeader.subject{}',
         'msgParts{}.detectedName',
-        'msgParts{}.detectedMime',
-        all_urls,
-        'filter.modules.urldefense.counts.total',
-        'filter.modules.urldefense.counts.rewritten',
-        'filter.modules.urldefense.counts.unrewritten',
+        url,
         'connection.ip',
         'connection.country',
         'filter.modules.dmarc.filterdResult',
