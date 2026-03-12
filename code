@@ -1,1 +1,13 @@
-
+index=proofpoint sourcetype=proofpoint_tap_siem
+| where 'threatsInfoMap{}.threatType'="url"
+| where 'threatsInfoMap{}.threatStatus'="active"
+| eval attachment=mvindex('messageParts{}.filename',0)
+| where match(attachment,"(?i)\.ics$")
+      OR match(lower(subject),
+         "(?i)meeting|invite|calendar|teams|join")
+| table eventTime, sender, recpt, subject,
+        'threatsInfoMap{}.threat',
+        'threatsInfoMap{}.classification',
+        'threatsInfoMap{}.threatStatus',
+        phishScore, action, quarantineFolder
+| sort -eventTime
