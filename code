@@ -1,1 +1,1 @@
-This query detects phishing attempts disguised as calendar meeting invites where the embedded URLs do not point to any known legitimate meeting platform such as Microsoft Teams, Zoom, Webex, or Google Meet.
+Note: Baselining required — legitimate business applications such as travel booking, HR, CRM, and vendor systems regularly embed non-meeting URLs in calendar invites and will trigger false positives until excluded.
