@@ -1,13 +1,21 @@
 index=proofpoint sourcetype=proofpoint_tap_siem
-| where 'threatsInfoMap{}.threatType'="url"
-| where 'threatsInfoMap{}.threatStatus'="active"
+eventType=messagesBlocked
 | eval attachment=mvindex('messageParts{}.filename',0)
 | where match(attachment,"(?i)\.ics$")
-      OR match(lower(subject),
-         "(?i)meeting|invite|calendar|teams|join")
-| table eventTime, sender, recpt, subject,
-        'threatsInfoMap{}.threat',
-        'threatsInfoMap{}.classification',
-        'threatsInfoMap{}.threatStatus',
-        phishScore, action, quarantineFolder
-| sort -eventTime
+      OR match('messageParts{}.contentType',"(?i)text/calendar")
+| rename recpt as affected_user
+| join type=inner affected_user [
+    search index=o365 sourcetype="o365:management:activity"
+    Workload=Exchange
+    command=Create object_category=meeting
+    | rename user as affected_user
+    | eval o365_time=_time
+    | table affected_user, o365_time, object,
+            object_category, owner, src_ip]
+| eval time_gap_mins=round((o365_time-_time)/60,1)
+| where time_gap_mins >= 0
+      AND time_gap_mins < 30
+| table _time, affected_user, subject,
+        action, attachment, o365_time,
+        object, object_category, time_gap_mins
+| sort time_gap_mins
