@@ -1,10 +1,11 @@
 index=proofpoint sourcetype=pps_messagelog
 | where mvfind('msgParts{}.detectedExt',"(?i)^ICS$") >= 0
       OR mvfind('msgParts{}.detectedMime',"(?i)text/calendar") >= 0
-| where 'filter.modules.urldefense.counts.total' > 0
-| eval rewritten_url=mvindex('msgParts{}.textExtracted',0)
-| where NOT match(lower(rewritten_url),
+| where mvcount('msgParts{}.urls{}.url') > 0
+| eval all_urls=mvjoin('msgParts{}.urls{}.url',"|")
+| where NOT match(lower(all_urls),
         "(?i)teams\.microsoft\.com|zoom\.us|webex\.com|meet\.google\.com|gotomeeting\.com|skype\.com|bluejeans\.com|chime\.aws|whereby\.com|ringcentral\.com")
+| where len(all_urls) > 0
 | eval recipient=mvindex('envelope.rcpts{}',0)
 | table _time, action,
         'envelope.from',
@@ -12,7 +13,7 @@ index=proofpoint sourcetype=pps_messagelog
         'msg.normalizedHeader.subject{}',
         'msgParts{}.detectedName',
         'msgParts{}.detectedMime',
-        rewritten_url,
+        all_urls,
         'filter.modules.urldefense.counts.total',
         'filter.modules.urldefense.counts.rewritten',
         'filter.modules.urldefense.counts.unrewritten',
