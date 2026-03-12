@@ -1,16 +1,15 @@
 index=proofpoint sourcetype=proofpoint_tap_siem eventType=messagesBlocked
-| eval ics_idx=mvfind('messageParts{}.filename',"(?i)\.ics$")
+| eval ics_idx=mvfind('messageParts{}.filename',"(?i)(\.ics$|ical)")
 | eval cal_idx=mvfind('messageParts{}.contentType',"(?i)text/calendar")
 | where isnotnull(ics_idx) OR isnotnull(cal_idx)
-    OR match(mvjoin('messageParts{}.filename'," "),"(?i)ical")
 | rename recpt as affected_user
 | join type=inner affected_user [
     search index=o365 sourcetype="o365:management:activity"
-    Workload=Exchange command=Create object_category=meeting
+    Workload=Exchange Operation=Create
     | rename user as affected_user
     | eval o365_time=_time
-    | table affected_user, o365_time, object, object_category, owner, src_ip]
+    | table affected_user, o365_time, Operation, ClientIP, ObjectId]
 | eval time_gap_mins=round((o365_time-_time)/60,1)
 | where time_gap_mins >= 0 AND time_gap_mins < 30
-| table _time, affected_user, subject, action, o365_time, object, object_category, time_gap_mins
+| table _time, affected_user, subject, o365_time, Operation, ClientIP, ObjectId, time_gap_mins
 | sort time_gap_mins
