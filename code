@@ -1,6 +1,12 @@
-sourcetype="o365:management:activity" Workload=Exchange Operation=Create "\\Calendar"
-| spath "Item.ParentFolder.Name" output=FolderName
-| spath "Item.ParentFolder.Path" output=FolderPath
-| spath "Item.Subject" output=Subject
-| search FolderName="Calendar"
-| table _time, UserId, MailboxOwnerUPN, Subject, FolderPath, ClientIP, ClientInfoString
+1. .ICS file auto-writes a calendar entry without user interaction
+No click needed. The invite lands directly in the calendar with a malicious URL hidden behind a legitimate-looking join button.
+2. Calendar entry survives email deletion
+Once processed, the calendar item lives independently. Deleting the email does not remove the lure.
+3. Silent URL swap via updated .ICS
+Attacker resends the same event UID with a new URL. Calendar entry updates silently — no new email, no alert, victim sees nothing changed.
+4. Cancellation cleans the traces
+Attacker sends a cancel .ICS after objective is met. Removes the calendar entry, leaves minimal forensic trail.
+5. Join button hides the real URL
+Calendar clients render it as a styled button. Raw URL is invisible unless user explicitly inspects the link.
+6. Proofpoint and Microsoft acknowledged the gap
+Neither email filtering nor calendar auditing reliably catches this chain. The attack lives in the space between email security and calendar processing.
