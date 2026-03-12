@@ -1,28 +1,68 @@
-============================================================
-SPLUNK INVESTIGATION QUERIES - ICS PHISHING DETECTION
-Proofpoint TAP + O365 Correlation
-============================================================
+================================================================================
+CALENDAR PROCESSING ABUSE — SPLUNK HUNT QUERIES
+Purple Team | Threat Informed Defence | SYF
+Generated: 2026-03-12
+================================================================================
 
-OBJECTIVE:
-Detect blocked emails with calendar (.ics) attachments from Proofpoint
-and correlate them with subsequent O365 Exchange activity by the same
-user within 30 minutes — a potential indicator of calendar phishing.
+--------------------------------------------------------------------------------
+INDEX    : proofpoint
+SOURCETYPE: proofpoint_tap_siem
+DESCRIPTION: Proofpoint TAP SIEM logs — blocked and quarantined email verdicts,
+             threat intelligence, phish/impostor/malware scores, attachment
+             metadata, URL threat data. Gateway level visibility only — verdict
+             already applied before delivery.
+--------------------------------------------------------------------------------
 
-------------------------------------------------------------
-QUERY 1 — ORIGINAL DETECTION QUERY (Had Zero Results)
-------------------------------------------------------------
-PURPOSE:
-The original query attempting to correlate blocked .ics emails in
-Proofpoint with meeting creation events in O365. Returned zero results
-due to: (1) mvindex only grabbing index 0 of messageParts, missing .ics
-attachments at other indices, and (2) object_category=meeting not
-existing in the O365 data.
-
+HUNT-01 — ICS Attachment Blocked or Quarantined
+------------------------------------------------
 index=proofpoint sourcetype=proofpoint_tap_siem
 eventType=messagesBlocked
 | eval attachment=mvindex('messageParts{}.filename',0)
 | where match(attachment,"(?i)\.ics$")
-    OR match('messageParts{}.contentType',"(?i)text/calendar")
+      OR match('messageParts{}.contentType',"(?i)text/calendar")
+| table eventTime, action, sender, recpt,
+        subject, phishScore, impostorScore,
+        malwareScore, quarantineFolder,
+        quarantineRule, attachment, senderIP
+| sort -phishScore
+
+
+HUNT-02 — High Impostor Score With Calendar Themed Subject
+----------------------------------------------------------
+index=proofpoint sourcetype=proofpoint_tap_siem
+| where impostorScore > 70
+| where match(lower(subject),
+        "(?i)meeting|invite|calendar|follow.up|join|teams|catch.up|sync|discussion")
+| table eventTime, action, sender, recpt,
+        subject, impostorScore, phishScore,
+        quarantineFolder, quarantineRule, senderIP
+| sort -impostorScore
+
+
+HUNT-03 — Active Threat URL in Calendar Email
+---------------------------------------------
+index=proofpoint sourcetype=proofpoint_tap_siem
+| where 'threatsInfoMap{}.threatType'="url"
+| where 'threatsInfoMap{}.threatStatus'="active"
+| eval attachment=mvindex('messageParts{}.filename',0)
+| where match(attachment,"(?i)\.ics$")
+      OR match(lower(subject),
+         "(?i)meeting|invite|calendar|teams|join")
+| table eventTime, sender, recpt, subject,
+        'threatsInfoMap{}.threat',
+        'threatsInfoMap{}.classification',
+        'threatsInfoMap{}.threatStatus',
+        phishScore, action, quarantineFolder
+| sort -eventTime
+
+
+HUNT-04 — ICS Blocked by Proofpoint But Calendar Event Still Created (CRITICAL GAP)
+-------------------------------------------------------------------------------------
+index=proofpoint sourcetype=proofpoint_tap_siem
+eventType=messagesBlocked
+| eval attachment=mvindex('messageParts{}.filename',0)
+| where match(attachment,"(?i)\.ics$")
+      OR match('messageParts{}.contentType',"(?i)text/calendar")
 | rename recpt as affected_user
 | join type=inner affected_user [
     search index=o365 sourcetype="o365:management:activity"
@@ -34,148 +74,297 @@ eventType=messagesBlocked
             object_category, owner, src_ip]
 | eval time_gap_mins=round((o365_time-_time)/60,1)
 | where time_gap_mins >= 0
-    AND time_gap_mins < 30
+      AND time_gap_mins < 30
 | table _time, affected_user, subject,
         action, attachment, o365_time,
         object, object_category, time_gap_mins
 | sort time_gap_mins
 
 
-------------------------------------------------------------
-QUERY 2 — DIAGNOSE PROOFPOINT ATTACHMENT FIELD
-------------------------------------------------------------
-PURPOSE:
-Check what filenames are actually stored in messageParts{}.filename
-across all Proofpoint blocked messages. Revealed that .ics files
-were stored at different multivalue indices (not always index 0),
-and some were logged as "ical.txt" or "text-calendar" instead of
-"invite.ics". Using mvindex(...,0) was only grabbing the first part
-(usually "text.html"), missing the actual attachment.
+================================================================================
+INDEX    : proofpoint
+SOURCETYPE: pps_messagelog
+DESCRIPTION: Proofpoint Protection Server (PPS) raw mail processing logs —
+             full MIME inspection, per-part attachment metadata, SPF/DKIM/DMARC
+             results, spam scores per classifier, URL defense rewrite counts,
+             sandbox verdicts per part, connection metadata. Most granular email
+             log available. Captures ICS files even when no TAP verdict is fired.
+================================================================================
 
-index=proofpoint sourcetype=proofpoint_tap_siem eventType=messagesBlocked
-| eval attachment=mvindex('messageParts{}.filename',0)
-| stats count by attachment
-| sort -count
-
-
-------------------------------------------------------------
-QUERY 3 — DIAGNOSE PROOFPOINT CONTENT TYPE FIELD
-------------------------------------------------------------
-PURPOSE:
-Check what content types are stored in messageParts{}.contentType
-to understand how calendar content is identified in Proofpoint TAP logs.
-
-index=proofpoint sourcetype=proofpoint_tap_siem eventType=messagesBlocked
-| eval ct=mvindex('messageParts{}.contentType',0)
-| stats count by ct
-| sort -count
-
-
-------------------------------------------------------------
-QUERY 4 — DIAGNOSE O365 OBJECT_CATEGORY FIELD
-------------------------------------------------------------
-PURPOSE:
-Check what values exist in object_category for O365 Exchange Create
-operations. Revealed that object_category only contains "mail" —
-the value "meeting" does not exist, which was causing zero results
-in the join.
-
-index=o365 sourcetype="o365:management:activity" Workload=Exchange command=Create
-| stats values(object_category) ``object_category=meeting``
+HUNT-05 — ICS File Detected in Any Delivered Email
+---------------------------------------------------
+index=proofpoint sourcetype=pps_messagelog
+| where mvfind('msgParts{}.detectedExt',"(?i)^ICS$") >= 0
+      OR mvfind('msgParts{}.detectedMime',"(?i)text/calendar") >= 0
+      OR mvfind('msgParts{}.labeledExt',"(?i)^ics$") >= 0
+| eval recipient=mvindex('envelope.rcpts{}',0)
+| table _time, action,
+        'envelope.from',
+        recipient,
+        'msg.normalizedHeader.subject{}',
+        'msgParts{}.detectedName',
+        'msgParts{}.detectedExt',
+        'msgParts{}.sandboxStatus',
+        'filter.modules.spam.scores.overall',
+        'connection.ip',
+        'connection.country',
+        'filter.modules.urldefense.counts.rewritten'
+| sort -_time
 
 
-------------------------------------------------------------
-QUERY 5 — DISCOVER O365 OPERATIONS
-------------------------------------------------------------
-PURPOSE:
-List all Operation values in O365 Exchange audit logs to understand
-what actions are actually being logged. Also revealed that the correct
-field name is "Operation" not "command". Key operations found include:
-MailItemsAccessed, AttachmentAccess, MoveToDeletedItems, SoftDelete,
-Update, Create, Send, HardDelete, UpdateInboxRules, SendAs, etc.
-
-index=o365 sourcetype="o365:management:activity" Workload=Exchange
-| stats count by Operation
-| sort -count
-
-
-------------------------------------------------------------
-QUERY 6 — IDENTIFY O365 USER FIELD NAME
-------------------------------------------------------------
-PURPOSE:
-Confirm the correct field name for the user/actor in O365 audit logs
-to use in the join. Revealed that "user" is the correct field
-(not "UserId" which was empty), and emails are in
-Firstname.Lastname@syf.com format.
-
-index=o365 sourcetype="o365:management:activity" Workload=Exchange Operation=Create
-| head 1
-| table UserId, user, Actor, ObjectId
+HUNT-06 — ICS File Delivered With URL Rewritten (Proofpoint Saw the URL)
+-------------------------------------------------------------------------
+index=proofpoint sourcetype=pps_messagelog
+| where mvfind('msgParts{}.detectedExt',"(?i)^ICS$") >= 0
+      OR mvfind('msgParts{}.detectedMime',"(?i)text/calendar") >= 0
+| where 'filter.modules.urldefense.counts.rewritten' > 0
+| eval recipient=mvindex('envelope.rcpts{}',0)
+| table _time, action,
+        'envelope.from',
+        recipient,
+        'msg.normalizedHeader.subject{}',
+        'msgParts{}.detectedName',
+        'filter.modules.urldefense.counts.rewritten',
+        'filter.modules.urldefense.counts.total',
+        'filter.modules.urldefense.counts.unrewritten',
+        'connection.ip', 'connection.country'
+| sort -_time
 
 
-------------------------------------------------------------
-QUERY 7 — VERIFY PROOFPOINT RECIPIENT FORMAT
-------------------------------------------------------------
-PURPOSE:
-Confirm the exact email format used in Proofpoint recipient fields
-before running the join. Critical to ensure both datasets use the
-same email format (e.g., firstname.lastname@syf.com) otherwise the
-inner join will silently return zero results.
-
-index=proofpoint sourcetype=proofpoint_tap_siem eventType=messagesBlocked
-| eval ics_idx=mvfind('messageParts{}.filename',"(?i)(\.ics$|ical)")
-| where isnotnull(ics_idx)
-| stats count by recpt
-| head 20
-
-
-------------------------------------------------------------
-QUERY 8 — FINAL CORRECTED DETECTION QUERY
-------------------------------------------------------------
-PURPOSE:
-The fully corrected version of the original detection query.
-Key fixes applied:
-  - Used mvfind() instead of mvindex(...,0) to search ALL indices
-    of the multivalue messageParts field for .ics/ical filenames
-  - Removed object_category=meeting (field value doesn't exist)
-  - Changed "command" to "Operation" (correct O365 field name)
-  - Changed "user as affected_user" confirmed as correct join field
-  - Added ClientIP and ObjectId to output for richer context
-
-index=proofpoint sourcetype=proofpoint_tap_siem eventType=messagesBlocked
-| eval ics_idx=mvfind('messageParts{}.filename',"(?i)(\.ics$|ical)")
-| eval cal_idx=mvfind('messageParts{}.contentType',"(?i)text/calendar")
-| where isnotnull(ics_idx) OR isnotnull(cal_idx)
-| rename recpt as affected_user
-| join type=inner affected_user [
-    search index=o365 sourcetype="o365:management:activity"
-    Workload=Exchange Operation=Create
-    | rename user as affected_user
-    | eval o365_time=_time
-    | table affected_user, o365_time, Operation, ClientIP, ObjectId]
-| eval time_gap_mins=round((o365_time-_time)/60,1)
-| where time_gap_mins >= 0 AND time_gap_mins < 30
-| table _time, affected_user, subject, o365_time,
-        Operation, ClientIP, ObjectId, time_gap_mins
-| sort time_gap_mins
+HUNT-07 — ICS File Delivered With URL NOT Rewritten (DETECTION GAP)
+--------------------------------------------------------------------
+index=proofpoint sourcetype=pps_messagelog
+| where mvfind('msgParts{}.detectedExt',"(?i)^ICS$") >= 0
+      OR mvfind('msgParts{}.detectedMime',"(?i)text/calendar") >= 0
+| where 'filter.modules.urldefense.counts.rewritten' = 0
+      AND 'filter.modules.urldefense.counts.total' > 0
+| eval recipient=mvindex('envelope.rcpts{}',0)
+| table _time, action,
+        'envelope.from',
+        recipient,
+        'msg.normalizedHeader.subject{}',
+        'msgParts{}.detectedName',
+        'filter.modules.urldefense.counts.rewritten',
+        'filter.modules.urldefense.counts.total',
+        'filter.modules.urldefense.counts.unrewritten',
+        'connection.ip', 'connection.country'
+| sort -_time
 
 
-============================================================
-SUMMARY OF ROOT CAUSES FOR ZERO RESULTS
-============================================================
+HUNT-08 — ICS File From External Country With Sandbox NOT SUPPORTED
+--------------------------------------------------------------------
+index=proofpoint sourcetype=pps_messagelog
+| where mvfind('msgParts{}.detectedExt',"(?i)^ICS$") >= 0
+      OR mvfind('msgParts{}.detectedMime',"(?i)text/calendar") >= 0
+| where mvfind('msgParts{}.sandboxStatus',"NOT_SUPPORTED") >= 0
+| where NOT match('connection.country',"(?i)^us$")
+| eval recipient=mvindex('envelope.rcpts{}',0)
+| table _time, action,
+        'envelope.from',
+        recipient,
+        'msg.normalizedHeader.subject{}',
+        'msgParts{}.detectedName',
+        'msgParts{}.sandboxStatus',
+        'connection.ip',
+        'connection.country',
+        'filter.modules.dmarc.filterdResult',
+        'filter.modules.spf.result'
+| sort -_time
 
-1. mvindex('messageParts{}.filename',0) only grabbed the FIRST part
-   of the multivalue field (usually text.html), missing .ics files
-   stored at other indices. Fix: use mvfind() to search all indices.
 
-2. object_category=meeting does not exist in O365 data.
-   Only value present is "mail". Filter was silently dropping all results.
+HUNT-09 — ICS File With DMARC or SPF Failure
+---------------------------------------------
+index=proofpoint sourcetype=pps_messagelog
+| where mvfind('msgParts{}.detectedExt',"(?i)^ICS$") >= 0
+      OR mvfind('msgParts{}.detectedMime',"(?i)text/calendar") >= 0
+| where 'filter.modules.dmarc.filterdResult' != "pass"
+      OR 'filter.modules.spf.result' != "pass"
+| eval recipient=mvindex('envelope.rcpts{}',0)
+| table _time, action,
+        'envelope.from',
+        recipient,
+        'msg.normalizedHeader.subject{}',
+        'msgParts{}.detectedName',
+        'filter.modules.dmarc.filterdResult',
+        'filter.modules.spf.result',
+        'filter.modules.dkimv{}.result',
+        'connection.ip', 'connection.country'
+| sort -_time
 
-3. Field name "command" is incorrect for O365 audit logs.
-   Correct field name is "Operation".
 
-4. userId field is empty in O365 logs. Correct join field is "user".
+HUNT-10 — Multiple ICS Files in Same Email
+------------------------------------------
+index=proofpoint sourcetype=pps_messagelog
+| where mvfind('msgParts{}.detectedExt',"(?i)^ICS$") >= 0
+| eval ics_count=mvcount(mvfilter(match('msgParts{}.detectedExt',"(?i)^ICS$")))
+| where ics_count > 1
+| eval recipient=mvindex('envelope.rcpts{}',0)
+| table _time, action,
+        'envelope.from',
+        recipient,
+        'msg.normalizedHeader.subject{}',
+        'msgParts{}.detectedName',
+        ics_count,
+        'connection.ip',
+        'connection.country'
+| sort -ics_count
 
-============================================================
+
+================================================================================
+INDEX    : o365
+SOURCETYPE: o365:management:activity
+DESCRIPTION: Microsoft Office 365 Exchange audit logs — mailbox operations
+             (Create, Update, SoftDelete, HardDelete), calendar event lifecycle,
+             client info, item metadata, attachment names, folder paths, user
+             identity. Post-delivery visibility — captures what happened inside
+             the mailbox AFTER Proofpoint passed or missed the email. Key fields:
+             command, object_category=meeting, Item.Attachments, ClientInfoString,
+             ExternalAccess, MailboxOwnerUPN, user_agent.
+================================================================================
+
+HUNT-11 — Calendar Event Created With ICS Attachment
+-----------------------------------------------------
+index=o365 sourcetype="o365:management:activity"
+Workload=Exchange command=Create
+object_category=meeting
+| where match('Item.Attachments',"(?i)\.ics")
+| table _time, UserId, command,
+        object, object_category,
+        'Item.Attachments',
+        'Item.Subject',
+        'Item.ParentFolder.Path',
+        ClientInfoString,
+        ExternalAccess,
+        src_ip, ResultStatus
+| sort -_time
+
+
+HUNT-12 — Calendar Event Updated From External Source (UID Hijack)
+------------------------------------------------------------------
+index=o365 sourcetype="o365:management:activity"
+Workload=Exchange command=Update
+object_category=meeting
+| where ExternalAccess="true"
+      OR match(ClientInfoString,"(?i)REST|Graph")
+| table _time, UserId, command,
+        object, object_category,
+        'Item.Subject',
+        'Item.ParentFolder.Path',
+        ClientInfoString,
+        ExternalAccess,
+        src_ip, ResultStatus,
+        MailboxOwnerUPN
+| sort -_time
+
+
+HUNT-13 — Full Attack Lifecycle Create → Update → Delete on Same Meeting
+-------------------------------------------------------------------------
+index=o365 sourcetype="o365:management:activity"
+Workload=Exchange
+command IN ("Create","Update","SoftDelete","HardDelete","MoveToDeletedItems")
+object_category=meeting
+| stats values(command) as commands,
+        min(_time) as first_seen,
+        max(_time) as last_seen,
+        values(UserId) as users,
+        values(src_ip) as src_ips,
+        values(ClientInfoString) as clients
+        by object
+| where mvcount(commands) >= 3
+| eval lifecycle_mins=round((last_seen-first_seen)/60,1)
+| eval attack_chain=mvjoin(commands," → ")
+| table object, attack_chain, users,
+        src_ips, clients,
+        first_seen, last_seen, lifecycle_mins
+| sort lifecycle_mins
+
+
+HUNT-14 — Calendar Event Created via Graph API Direct Injection (No Email)
+---------------------------------------------------------------------------
+index=o365 sourcetype="o365:management:activity"
+Workload=Exchange command=Create
+object_category=meeting
+| where match(ClientInfoString,"(?i)Client=REST")
+      OR match(user_agent,"(?i)REST|Graph|python|requests")
+| table _time, UserId, command,
+        object, object_category,
+        'Item.Subject',
+        ClientInfoString,
+        user_agent,
+        ExternalAccess,
+        src_ip, ResultStatus,
+        MailboxOwnerUPN, tenant_id
+| sort -_time
+
+
+HUNT-15 — Same Meeting Updated by Different User (Lateral Spread)
+-----------------------------------------------------------------
+index=o365 sourcetype="o365:management:activity"
+Workload=Exchange
+command IN ("Create","Update")
+object_category=meeting
+| stats values(command) as commands,
+        values(UserId) as users,
+        dc(UserId) as distinct_users,
+        dc(MailboxOwnerUPN) as affected_mailboxes,
+        min(_time) as first_seen,
+        max(_time) as last_seen,
+        values(src_ip) as src_ips
+        by object
+| where distinct_users > 1
+      OR affected_mailboxes > 3
+| eval time_gap_mins=round((last_seen-first_seen)/60,1)
+| table object, commands, users, distinct_users,
+        affected_mailboxes, src_ips,
+        first_seen, last_seen, time_gap_mins
+| sort -affected_mailboxes
+
+
+HUNT-16 — Calendar Event Created Then Cancelled Within 24 Hours (Cleanup)
+--------------------------------------------------------------------------
+index=o365 sourcetype="o365:management:activity"
+Workload=Exchange
+command IN ("Create","SoftDelete","HardDelete","MoveToDeletedItems")
+object_category=meeting
+| stats values(command) as commands,
+        min(_time) as first_seen,
+        max(_time) as last_seen,
+        values(UserId) as users,
+        values(MailboxOwnerUPN) as mailboxes
+        by object
+| where mvfind(commands,"Create") >= 0
+      AND (mvfind(commands,"SoftDelete") >= 0
+           OR mvfind(commands,"HardDelete") >= 0
+           OR mvfind(commands,"MoveToDeletedItems") >= 0)
+| eval lifecycle_mins=round((last_seen-first_seen)/60,1)
+| where lifecycle_mins < 1440
+| table object, commands, users, mailboxes,
+        first_seen, last_seen, lifecycle_mins
+| sort lifecycle_mins
+
+
+================================================================================
+HUNT PRIORITY SUMMARY
+================================================================================
+
+PRIORITY  HUNT     INDEX                    WHAT IT CATCHES
+--------  -------  -----------------------  ------------------------------------
+P1        Hunt-04  proofpoint + o365        Blocked by PP but calendar created — core gap
+P1        Hunt-14  o365                     Graph API direct injection — zero email evidence
+P1        Hunt-15  o365                     Same meeting spread across multiple mailboxes
+P2        Hunt-13  o365                     Full lifecycle Create → Update → Delete
+P2        Hunt-07  proofpoint pps           ICS URL not rewritten — detection gap
+P2        Hunt-12  o365                     External update to existing calendar event
+P2        Hunt-16  o365                     Cancellation cleanup within 24 hours
+P3        Hunt-01  proofpoint tap           ICS blocked or quarantined
+P3        Hunt-05  proofpoint pps           Any ICS file in delivered email
+P3        Hunt-06  proofpoint pps           ICS with URL rewritten by Proofpoint
+P3        Hunt-08  proofpoint pps           ICS from external country sandbox unsupported
+P3        Hunt-09  proofpoint pps           ICS with DMARC or SPF failure
+P3        Hunt-10  proofpoint pps           Multiple ICS files in same email
+P3        Hunt-11  o365                     Calendar created with ICS attachment
+P3        Hunt-03  proofpoint tap           Active threat URL in calendar email
+
+================================================================================
 END OF FILE
-============================================================
+================================================================================
