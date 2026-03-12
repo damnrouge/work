@@ -1,31 +1,25 @@
-Identify malicious calendar invites via email.
-
-index=proofpoint sourcetype=proofpoint_tap_siem 
-( messageParts{}.contentType=text/calendar OR messageParts{}.filename=*.ics )
-| eval threat_score = coalesce(phishScore, impostorScore, malwareScore)
-| where threat_score > 50
-| table _time, sender, recpt, subject, threat_score, threatsInfoMap{}.threat, messageID
-| rename threatsInfoMap{}.threat as threats
-
-
+// Step 1: Get blocked ICS emails from Proofpoint
 index=proofpoint sourcetype=pps_messagelog
+( action=block OR action=quarantine )
 | spath output=msgParts{} path=msgParts{}
 | mvexpand msgParts{}
 | search msgParts{}.detectedExt=ics OR msgParts{}.detectedMime=text/calendar
 | eval join_key = lower(replace(message_id, "[<>]", ""))
-| table join_key, _time as email_time, envelope.from as sender, 
-         msg.parsedAddresses.to{} as recipients, msg.normalizedHeader.subject{} as subject,
-         msgParts{}.detectedName as ics_filename
+| table join_key, _time as pp_time, envelope.from as sender, msg.parsedAddresses.to{} as recipients, 
+         msg.normalizedHeader.subject{} as subject, msgParts{}.detectedName as ics_filename, 
+         action, final_rule
 | join type=inner join_key
+    // Step 2: Find matching calendar creations in O365
     [ search index=o365 sourcetype=o365:management:activity
       Workload=Exchange
-      ( (command=Create Item.ParentFolder.Path=*Calendar*) OR
-        (command=Update (Item.ParentFolder.Path=*Calendar* OR object_category=meeting OR object=meeting OR Item.Class=IPM.Appointment)) )
+      command=Create
+      Item.ParentFolder.Path=*Calendar*
       | eval join_key = lower(replace(Item.InternetMessageId, "[<>]", ""))
       | table join_key, _time as o365_time, UserId as actor, 
                MailboxOwnerUPN as mailbox_owner, Item.Subject as meeting_subject,
                ClientInfoString, ClientIP ]
-| eval time_diff = o365_time - email_time
-| where time_diff >= 0 AND time_diff <= 86400   /* within 24 hours */
-| table email_time, o365_time, sender, recipients, subject, ics_filename, 
-         actor, mailbox_owner, meeting_subject, ClientInfoString, ClientIP, time_diff
+| eval time_diff = o365_time - pp_time
+| where time_diff >= 0 AND time_diff <= 300  // Event created within 5 minutes of email receipt
+| table pp_time, o365_time, sender, recipients, subject, ics_filename, 
+         actor, mailbox_owner, meeting_subject, ClientInfoString, ClientIP, final_rule
+| rename ClientIP as src_ip
