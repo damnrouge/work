@@ -1,25 +1,6 @@
-// Step 1: Get blocked ICS emails from Proofpoint
-index=proofpoint sourcetype=pps_messagelog
-( action=block OR action=quarantine )
-| spath output=msgParts{} path=msgParts{}
-| mvexpand msgParts{}
-| search msgParts{}.detectedExt=ics OR msgParts{}.detectedMime=text/calendar
-| eval join_key = lower(replace(message_id, "[<>]", ""))
-| table join_key, _time as pp_time, envelope.from as sender, msg.parsedAddresses.to{} as recipients, 
-         msg.normalizedHeader.subject{} as subject, msgParts{}.detectedName as ics_filename, 
-         action, final_rule
-| join type=inner join_key
-    // Step 2: Find matching calendar creations in O365
-    [ search index=o365 sourcetype=o365:management:activity
-      Workload=Exchange
-      command=Create
-      Item.ParentFolder.Path=*Calendar*
-      | eval join_key = lower(replace(Item.InternetMessageId, "[<>]", ""))
-      | table join_key, _time as o365_time, UserId as actor, 
-               MailboxOwnerUPN as mailbox_owner, Item.Subject as meeting_subject,
-               ClientInfoString, ClientIP ]
-| eval time_diff = o365_time - pp_time
-| where time_diff >= 0 AND time_diff <= 300  // Event created within 5 minutes of email receipt
-| table pp_time, o365_time, sender, recipients, subject, ics_filename, 
-         actor, mailbox_owner, meeting_subject, ClientInfoString, ClientIP, final_rule
-| rename ClientIP as src_ip
+sourcetype="o365:management:activity" Workload=Exchange Operation=Create "\\Calendar"
+| spath "Item.ParentFolder.Name" output=FolderName
+| spath "Item.ParentFolder.Path" output=FolderPath
+| spath "Item.Subject" output=Subject
+| search FolderName="Calendar"
+| table _time, UserId, MailboxOwnerUPN, Subject, FolderPath, ClientIP, ClientInfoString
