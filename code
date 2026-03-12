@@ -1,40 +1,31 @@
-index=o365 sourcetype="o365:management:activity"
-Workload=Exchange command=Update
-object_category=meeting
-| where ExternalAccess="true"
-| eval clean_msgid=lower(replace('Item.InternetMessageId',"[<>]",""))
-| rename clean_msgid as join_key
-| join type=inner join_key [
-    search index=proofpoint sourcetype=pps_messagelog
-    | eval clean_msgid=lower(replace('message_id',"[<>]",""))
-    | rename clean_msgid as join_key
-    | eval recipient=mvindex('envelope.rcpts{}',0)
-    | eval subject=mvindex('msg.normalizedHeader.subject{}',0)
-    | table join_key,
-            'envelope.from',
-            recipient,
-            subject,
-            'connection.ip',
-            'connection.country',
-            'filter.modules.spam.scores.overall',
-            'filter.modules.dmarc.filterdResult',
-            'filter.modules.spf.result',
-            'msgParts{}.detectedExt',
-            action]
-| table _time, UserId,
-        command, object,
-        object_category,
-        'Item.Subject',
-        'Item.ParentFolder.Path',
-        ClientInfoString,
-        ExternalAccess,
-        MailboxOwnerUPN,
-        'envelope.from',
-        recipient,
-        'connection.ip',
-        'connection.country',
-        'filter.modules.dmarc.filterdResult',
-        'filter.modules.spf.result',
-        'filter.modules.spam.scores.overall',
-        action
-| sort -_time
+Identify malicious calendar invites via email.
+
+index=proofpoint sourcetype=proofpoint_tap_siem 
+( messageParts{}.contentType=text/calendar OR messageParts{}.filename=*.ics )
+| eval threat_score = coalesce(phishScore, impostorScore, malwareScore)
+| where threat_score > 50
+| table _time, sender, recpt, subject, threat_score, threatsInfoMap{}.threat, messageID
+| rename threatsInfoMap{}.threat as threats
+
+
+index=proofpoint sourcetype=pps_messagelog
+| spath output=msgParts{} path=msgParts{}
+| mvexpand msgParts{}
+| search msgParts{}.detectedExt=ics OR msgParts{}.detectedMime=text/calendar
+| eval join_key = lower(replace(message_id, "[<>]", ""))
+| table join_key, _time as email_time, envelope.from as sender, 
+         msg.parsedAddresses.to{} as recipients, msg.normalizedHeader.subject{} as subject,
+         msgParts{}.detectedName as ics_filename
+| join type=inner join_key
+    [ search index=o365 sourcetype=o365:management:activity
+      Workload=Exchange
+      ( (command=Create Item.ParentFolder.Path=*Calendar*) OR
+        (command=Update (Item.ParentFolder.Path=*Calendar* OR object_category=meeting OR object=meeting OR Item.Class=IPM.Appointment)) )
+      | eval join_key = lower(replace(Item.InternetMessageId, "[<>]", ""))
+      | table join_key, _time as o365_time, UserId as actor, 
+               MailboxOwnerUPN as mailbox_owner, Item.Subject as meeting_subject,
+               ClientInfoString, ClientIP ]
+| eval time_diff = o365_time - email_time
+| where time_diff >= 0 AND time_diff <= 86400   /* within 24 hours */
+| table email_time, o365_time, sender, recipients, subject, ics_filename, 
+         actor, mailbox_owner, meeting_subject, ClientInfoString, ClientIP, time_diff
