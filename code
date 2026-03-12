@@ -1,1 +1,40 @@
-Note: Baselining required — legitimate business applications such as travel booking, HR, CRM, and vendor systems regularly embed non-meeting URLs in calendar invites and will trigger false positives until excluded.
+index=o365 sourcetype="o365:management:activity"
+Workload=Exchange command=Update
+object_category=meeting
+| where ExternalAccess="true"
+| eval clean_msgid=lower(replace('Item.InternetMessageId',"[<>]",""))
+| rename clean_msgid as join_key
+| join type=inner join_key [
+    search index=proofpoint sourcetype=pps_messagelog
+    | eval clean_msgid=lower(replace('message_id',"[<>]",""))
+    | rename clean_msgid as join_key
+    | eval recipient=mvindex('envelope.rcpts{}',0)
+    | eval subject=mvindex('msg.normalizedHeader.subject{}',0)
+    | table join_key,
+            'envelope.from',
+            recipient,
+            subject,
+            'connection.ip',
+            'connection.country',
+            'filter.modules.spam.scores.overall',
+            'filter.modules.dmarc.filterdResult',
+            'filter.modules.spf.result',
+            'msgParts{}.detectedExt',
+            action]
+| table _time, UserId,
+        command, object,
+        object_category,
+        'Item.Subject',
+        'Item.ParentFolder.Path',
+        ClientInfoString,
+        ExternalAccess,
+        MailboxOwnerUPN,
+        'envelope.from',
+        recipient,
+        'connection.ip',
+        'connection.country',
+        'filter.modules.dmarc.filterdResult',
+        'filter.modules.spf.result',
+        'filter.modules.spam.scores.overall',
+        action
+| sort -_time
