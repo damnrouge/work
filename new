@@ -3,6 +3,7 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Collections.Generic;
 
 class HiveBuilder
 {
@@ -33,13 +34,21 @@ class HiveBuilder
     [DllImport("advapi32.dll")]
     static extern int RegCloseKey(IntPtr hKey);
 
-    const uint REG_SZ         = 1;
-    const uint REG_EXPAND_SZ  = 2;
-    const uint REG_BINARY     = 3;
-    const uint REG_DWORD      = 4;
-    const uint REG_MULTI_SZ   = 7;
-    const uint REG_QWORD      = 11;  // not officially defined in WinNT.h, but used in .reg for 64-bit ints
-    const uint REG_KEY_READ   = 0x20019;
+    // Registry value type constants (from WinNT.h)
+    const uint REG_NONE        = 0;
+    const uint REG_SZ          = 1;
+    const uint REG_EXPAND_SZ   = 2;
+    const uint REG_BINARY      = 3;
+    const uint REG_DWORD       = 4;
+    const uint REG_DWORD_BIG_ENDIAN = 5;
+    const uint REG_LINK        = 6;
+    const uint REG_MULTI_SZ    = 7;
+    const uint REG_RESOURCE_LIST = 8;
+    const uint REG_FULL_RESOURCE_DESCRIPTOR = 9;
+    const uint REG_RESOURCE_REQUIREMENTS_LIST = 10;
+    const uint REG_QWORD       = 11;   // 64-bit integer
+
+    const uint REG_KEY_READ    = 0x20019;
 
     // -------------------------------------------------------
     // Create a registry key path level by level
@@ -80,7 +89,7 @@ class HiveBuilder
     }
 
     // -------------------------------------------------------
-    // Parse .reg file with flattened continuations
+    // Parse .reg file with flattened continuations and correct type handling
     // -------------------------------------------------------
     static void ImportRegFile(IntPtr hiveRoot, string regFilePath)
     {
@@ -161,33 +170,59 @@ class HiveBuilder
                     ORSetValue(currentKey, valueName, REG_DWORD, d, (uint)d.Length);
                     imported++;
                 }
-                else if (valueData.StartsWith("hex(2):"))
-                {
-                    byte[] d = ParseHexBytes(valueData.Substring(7));
-                    ORSetValue(currentKey, valueName, REG_EXPAND_SZ, d, (uint)d.Length);
-                    imported++;
-                }
-                else if (valueData.StartsWith("hex(7):"))
-                {
-                    byte[] d = ParseHexBytes(valueData.Substring(7));
-                    ORSetValue(currentKey, valueName, REG_MULTI_SZ, d, (uint)d.Length);
-                    imported++;
-                }
                 else if (valueData.StartsWith("hex("))
                 {
-                    // Catch all other hex types: hex: (binary), hex(b): (QWORD), hex(0):, etc.
+                    // General hex type: extract type code and hex data
                     int closeParen = valueData.IndexOf(')');
-                    if (closeParen > 3) // "hex(" is 4 chars
+                    if (closeParen > 3)
                     {
-                        string hexPart = valueData.Substring(closeParen + 2); // skip "):"
+                        string typePart = valueData.Substring(4, closeParen - 4); // e.g., "b", "7", "2", "", etc.
+                        string hexPart = valueData.Substring(closeParen + 2);      // skip "):"
                         byte[] d = ParseHexBytes(hexPart);
-                        // For simplicity, store as binary; Windows will handle it correctly.
-                        ORSetValue(currentKey, valueName, REG_BINARY, d, (uint)d.Length);
+                        uint regType;
+
+                        // Map the type code to registry type constant
+                        switch (typePart)
+                        {
+                            case "":   // hex:
+                                regType = REG_BINARY;
+                                break;
+                            case "0":  // REG_NONE
+                                regType = REG_NONE;
+                                break;
+                            case "1":  // REG_SZ (uncommon)
+                                regType = REG_SZ;
+                                break;
+                            case "2":  // REG_EXPAND_SZ
+                                regType = REG_EXPAND_SZ;
+                                break;
+                            case "3":  // REG_BINARY
+                                regType = REG_BINARY;
+                                break;
+                            case "4":  // REG_DWORD (uncommon)
+                                regType = REG_DWORD;
+                                break;
+                            case "5":  // REG_DWORD_BIG_ENDIAN (rare)
+                                regType = REG_DWORD_BIG_ENDIAN;
+                                break;
+                            case "7":  // REG_MULTI_SZ
+                                regType = REG_MULTI_SZ;
+                                break;
+                            case "b":  // REG_QWORD (64-bit integer)
+                            case "B":
+                                regType = REG_QWORD;
+                                break;
+                            default:
+                                // Unknown type, fallback to binary
+                                regType = REG_BINARY;
+                                break;
+                        }
+                        ORSetValue(currentKey, valueName, regType, d, (uint)d.Length);
                         imported++;
                     }
                     else
                     {
-                        // fallback: treat as binary
+                        // Malformed hex line, treat as binary
                         byte[] d = ParseHexBytes(valueData.Substring(4));
                         ORSetValue(currentKey, valueName, REG_BINARY, d, (uint)d.Length);
                         imported++;
@@ -254,8 +289,8 @@ class HiveBuilder
     static void Main(string[] args)
     {
         Console.WriteLine("╔═══════════════════════════════════════════════════════════════╗");
-        Console.WriteLine("║     HiveBuilder v3 — Mandatory Profile Hive Generator         ║");
-        Console.WriteLine("║     Full hex type support (hex, hex(b), hex(2), hex(7), etc.)║");
+        Console.WriteLine("║     HiveBuilder v4 — Swarmer-compatible Hive Generator        ║");
+        Console.WriteLine("║     Full registry type support (hex(b), hex(7), etc.)        ║");
         Console.WriteLine("╚═══════════════════════════════════════════════════════════════╝");
         Console.WriteLine();
 
