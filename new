@@ -42,7 +42,7 @@ class HiveBuilder
     const uint REG_KEY_READ   = 0x20019;
 
     // -------------------------------------------------------
-    // Create a key path level by level
+    // Create a registry key path level by level
     // -------------------------------------------------------
     static IntPtr CreateKeyPath(IntPtr root, string keyPath)
     {
@@ -61,11 +61,11 @@ class HiveBuilder
     }
 
     // -------------------------------------------------------
-    // Parse hex bytes from a string (handles continuations)
+    // Parse hex bytes from a string (removes line continuations and spaces)
     // -------------------------------------------------------
     static byte[] ParseHexBytes(string hexStr)
     {
-        // Remove line continuations and all whitespace
+        // Remove any remaining backslashes and newlines (should already be gone, but be safe)
         string clean = Regex.Replace(hexStr, @"\\\s*\r?\n\s*", "");
         clean = clean.Replace(" ", "").Replace("\t", "");
 
@@ -80,26 +80,30 @@ class HiveBuilder
     }
 
     // -------------------------------------------------------
-    // Parse a .reg file, handling multi-line hex values
+    // Parse .reg file with flattened continuations
     // -------------------------------------------------------
     static void ImportRegFile(IntPtr hiveRoot, string regFilePath)
     {
         Console.WriteLine($"[*] Importing reg export: {regFilePath}");
 
-        // .reg files are UTF-16 LE
-        string[] lines = File.ReadAllLines(regFilePath, Encoding.Unicode);
+        // Read entire file as UTF-16 LE (the format reg export uses)
+        string fullFile = File.ReadAllText(regFilePath, Encoding.Unicode);
+
+        // Flatten all continuation lines: remove backslash + newline (and optional spaces)
+        // Pattern: a backslash followed by optional spaces, then a newline, then optional spaces
+        fullFile = Regex.Replace(fullFile, @"\\\s*\r?\n\s*", "");
+
+        // Split into lines again
+        string[] lines = fullFile.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
 
         IntPtr currentKey = IntPtr.Zero;
         string currentKeyPath = "";
         int imported = 0;
         int skipped = 0;
 
-        // Use index-based iteration to handle multi-line values
-        for (int i = 0; i < lines.Length; i++)
+        foreach (string rawLine in lines)
         {
-            string line = lines[i].Trim();
-
-            // Skip header and blank lines
+            string line = rawLine.Trim();
             if (string.IsNullOrEmpty(line)) continue;
             if (line.StartsWith("Windows Registry Editor")) continue;
             if (line.StartsWith(";")) continue;
@@ -135,48 +139,10 @@ class HiveBuilder
             if (currentKey == IntPtr.Zero) continue;
             if (!line.Contains("=")) continue;
 
-            // Split into name and data
             int eqIdx = line.IndexOf('=');
             string valueName = line.Substring(0, eqIdx).Trim().Trim('"');
             string valueData = line.Substring(eqIdx + 1).Trim();
 
-            // Handle multi-line hex values: if the line ends with a backslash,
-            // keep reading subsequent lines that start with whitespace and hex digits
-            if (valueData.EndsWith("\\") && (valueData.StartsWith("hex:") ||
-                valueData.StartsWith("hex(2):") || valueData.StartsWith("hex(7):")))
-            {
-                StringBuilder sb = new StringBuilder(valueData);
-                // Remove the trailing backslash
-                sb.Length--;
-
-                // Read continuation lines
-                while (i + 1 < lines.Length)
-                {
-                    string nextLine = lines[i + 1].TrimStart();
-                    if (string.IsNullOrEmpty(nextLine)) break;
-
-                    // If the next line starts with a backslash, it's a continuation
-                    if (nextLine.StartsWith("\\"))
-                    {
-                        sb.Append(nextLine.Substring(1)); // append without the backslash
-                        i++; // consume this line
-                    }
-                    else if (nextLine.StartsWith(",") || char.IsDigit(nextLine[0]) || nextLine[0] == ' ' || nextLine[0] == '\t')
-                    {
-                        // Sometimes continuation lines start directly with hex digits or a comma
-                        sb.Append(nextLine);
-                        i++;
-                    }
-                    else
-                    {
-                        // Not a continuation
-                        break;
-                    }
-                }
-                valueData = sb.ToString();
-            }
-
-            // Default value name (the @ symbol)
             if (valueName == "@") valueName = "";
 
             try
@@ -191,7 +157,6 @@ class HiveBuilder
                 }
                 else if (valueData.StartsWith("dword:"))
                 {
-                    // REG_DWORD
                     uint dw = Convert.ToUInt32(valueData.Substring(6), 16);
                     byte[] d = BitConverter.GetBytes(dw);
                     ORSetValue(currentKey, valueName, REG_DWORD, d, (uint)d.Length);
@@ -199,21 +164,18 @@ class HiveBuilder
                 }
                 else if (valueData.StartsWith("hex(2):"))
                 {
-                    // REG_EXPAND_SZ
                     byte[] d = ParseHexBytes(valueData.Substring(7));
                     ORSetValue(currentKey, valueName, REG_EXPAND_SZ, d, (uint)d.Length);
                     imported++;
                 }
                 else if (valueData.StartsWith("hex(7):"))
                 {
-                    // REG_MULTI_SZ
                     byte[] d = ParseHexBytes(valueData.Substring(7));
                     ORSetValue(currentKey, valueName, REG_MULTI_SZ, d, (uint)d.Length);
                     imported++;
                 }
                 else if (valueData.StartsWith("hex:"))
                 {
-                    // REG_BINARY
                     byte[] d = ParseHexBytes(valueData.Substring(4));
                     ORSetValue(currentKey, valueName, REG_BINARY, d, (uint)d.Length);
                     imported++;
@@ -221,7 +183,7 @@ class HiveBuilder
                 else
                 {
                     skipped++;
-                    string preview = valueData.Length > 30 ? valueData.Substring(0, 30) + "..." : valueData;
+                    string preview = valueData.Length > 40 ? valueData.Substring(0, 40) + "..." : valueData;
                     Console.WriteLine($"  [!] Skipped unknown format: {valueName} = {preview}");
                 }
             }
@@ -229,6 +191,9 @@ class HiveBuilder
             {
                 skipped++;
                 Console.WriteLine($"  [!] Error parsing {valueName}: {ex.Message}");
+                // Optionally show a snippet of the data for debugging
+                string snippet = valueData.Length > 60 ? valueData.Substring(0, 60) + "..." : valueData;
+                Console.WriteLine($"      Data: {snippet}");
             }
         }
 
@@ -278,8 +243,7 @@ class HiveBuilder
     {
         Console.WriteLine("╔═══════════════════════════════════════════════════════════════╗");
         Console.WriteLine("║     HiveBuilder v3 — Mandatory Profile Hive Generator         ║");
-        Console.WriteLine("║     Based on Praetorian's Swarmer technique                  ║");
-        Console.WriteLine("║     Fixed multi-line hex value parsing                        ║");
+        Console.WriteLine("║     Fixed multi-line hex parsing with file flattening         ║");
         Console.WriteLine("╚═══════════════════════════════════════════════════════════════╝");
         Console.WriteLine();
 
