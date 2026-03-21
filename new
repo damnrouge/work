@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 
-class HiveBuilder
+class Program
 {
     [DllImport("offreg.dll", CharSet = CharSet.Unicode)]
     static extern int OROpenHive(string hivePath, out IntPtr key);
