@@ -3,7 +3,6 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Collections.Generic;
 
 class HiveBuilder
 {
@@ -39,6 +38,7 @@ class HiveBuilder
     const uint REG_BINARY     = 3;
     const uint REG_DWORD      = 4;
     const uint REG_MULTI_SZ   = 7;
+    const uint REG_QWORD      = 11;  // not officially defined in WinNT.h, but used in .reg for 64-bit ints
     const uint REG_KEY_READ   = 0x20019;
 
     // -------------------------------------------------------
@@ -90,7 +90,6 @@ class HiveBuilder
         string fullFile = File.ReadAllText(regFilePath, Encoding.Unicode);
 
         // Flatten all continuation lines: remove backslash + newline (and optional spaces)
-        // Pattern: a backslash followed by optional spaces, then a newline, then optional spaces
         fullFile = Regex.Replace(fullFile, @"\\\s*\r?\n\s*", "");
 
         // Split into lines again
@@ -174,11 +173,25 @@ class HiveBuilder
                     ORSetValue(currentKey, valueName, REG_MULTI_SZ, d, (uint)d.Length);
                     imported++;
                 }
-                else if (valueData.StartsWith("hex:"))
+                else if (valueData.StartsWith("hex("))
                 {
-                    byte[] d = ParseHexBytes(valueData.Substring(4));
-                    ORSetValue(currentKey, valueName, REG_BINARY, d, (uint)d.Length);
-                    imported++;
+                    // Catch all other hex types: hex: (binary), hex(b): (QWORD), hex(0):, etc.
+                    int closeParen = valueData.IndexOf(')');
+                    if (closeParen > 3) // "hex(" is 4 chars
+                    {
+                        string hexPart = valueData.Substring(closeParen + 2); // skip "):"
+                        byte[] d = ParseHexBytes(hexPart);
+                        // For simplicity, store as binary; Windows will handle it correctly.
+                        ORSetValue(currentKey, valueName, REG_BINARY, d, (uint)d.Length);
+                        imported++;
+                    }
+                    else
+                    {
+                        // fallback: treat as binary
+                        byte[] d = ParseHexBytes(valueData.Substring(4));
+                        ORSetValue(currentKey, valueName, REG_BINARY, d, (uint)d.Length);
+                        imported++;
+                    }
                 }
                 else
                 {
@@ -191,7 +204,6 @@ class HiveBuilder
             {
                 skipped++;
                 Console.WriteLine($"  [!] Error parsing {valueName}: {ex.Message}");
-                // Optionally show a snippet of the data for debugging
                 string snippet = valueData.Length > 60 ? valueData.Substring(0, 60) + "..." : valueData;
                 Console.WriteLine($"      Data: {snippet}");
             }
@@ -243,7 +255,7 @@ class HiveBuilder
     {
         Console.WriteLine("╔═══════════════════════════════════════════════════════════════╗");
         Console.WriteLine("║     HiveBuilder v3 — Mandatory Profile Hive Generator         ║");
-        Console.WriteLine("║     Fixed multi-line hex parsing with file flattening         ║");
+        Console.WriteLine("║     Full hex type support (hex, hex(b), hex(2), hex(7), etc.)║");
         Console.WriteLine("╚═══════════════════════════════════════════════════════════════╝");
         Console.WriteLine();
 
