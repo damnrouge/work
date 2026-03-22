@@ -1,24 +1,13 @@
-# Create a benign "payload" for lab purposes — writes a timestamped log entry
-# This simulates what an attacker would drop as their persistent implant
+What we can detect:
+  - NTUSER.MAN file creation in %USERPROFILE% is fully visible 
+    via CrowdStrike file write telemetry (FileOpenInfo event)
+  - This is the highest fidelity IOC for this technique and 
+    should be alerted on immediately
 
-$payloadScript = @'
-$timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-$logEntry = "$timestamp - NTUSER.MAN persistence fired on $env:COMPUTERNAME as $env:USERNAME"
-Add-Content -Path "C:\ProgramData\persistence_log.txt" -Value $logEntry
-'@
-
-# Save payload as a PS1 that launches via a wrapper EXE
-$payloadScript | Out-File -FilePath "C:\ProgramData\payload.ps1" -Encoding UTF8
-
-# Create a VBScript launcher (to avoid PowerShell window flash — realistic attacker behavior)
-$launcher = @'
-Set WshShell = CreateObject("WScript.Shell")
-WshShell.Run "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File C:\ProgramData\payload.ps1", 0, False
-'@
-$launcher | Out-File -FilePath "C:\ProgramData\launcher.vbs" -Encoding ASCII
-
-Write-Host "[+] Payload files created:"
-Write-Host "    C:\ProgramData\payload.ps1  (actual payload)"
-Write-Host "    C:\ProgramData\launcher.vbs (silent launcher)"
-Write-Host ""
-Write-Host "[*] Run key will point to: wscript.exe C:\ProgramData\launcher.vbs"
+What we cannot detect:
+  - The actual hive manipulation via Offreg.dll has no 
+    detectable API surface — CrowdStrike does not instrument 
+    Offreg.dll calls
+  - No registry write events fire during hive construction 
+    since it operates entirely on a file rather than the 
+    live registry
