@@ -1,13 +1,2 @@
-What we can detect:
-  - NTUSER.MAN file creation in %USERPROFILE% is fully visible 
-    via CrowdStrike file write telemetry (FileOpenInfo event)
-  - This is the highest fidelity IOC for this technique and 
-    should be alerted on immediately
-
-What we cannot detect:
-  - The actual hive manipulation via Offreg.dll has no 
-    detectable API surface — CrowdStrike does not instrument 
-    Offreg.dll calls
-  - No registry write events fire during hive construction 
-    since it operates entirely on a file rather than the 
-    live registry
+index=* sourcetype=*crowdstrike* event_simpleName=RegistryHiveFileNameWritten
+| regex TargetFile="(?i)\\\\Users\\\\[^\\\\]+\\\\.*\\.man$"
