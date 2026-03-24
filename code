@@ -1,4 +1,4 @@
 index=crowdstrike_event_simpleName=RegistryFileWritten
 | rex field=TargetFileName "\\Users\\(?<username>[^\\]+)\\(?<remaining>.*)"
 | where like(remaining, "%ntuser.dat%")
-| table _time, host, username, TargetFileName, remainin
+| table _time, host, username, TargetFileName, remaining
