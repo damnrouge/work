@@ -1,2 +1,8 @@
-Get-ItemProperty "HKLM:\SYSTEM\CrowdStrike\{9b03c1d9-3138-44ed-9fae-d9f4c034b88d}\{16e0423f-7058-48c9-a204-725362b67639}\Default" |
-    Select-Object -Property *
+The file NTUSER.MAN is a binary registry hive placed in a user's profile folder to exploit Windows mandatory user profiles, causing the system to load it instead of the normal NTUSER.DAT at login.
+
+It is malicious because it was crafted offline using the Offline Registry API (offreg.dll) to embed a persistent Run or RunOnce key that executes an attacker‑controlled command each time the user logs in.
+
+This technique bypasses EDR because it never calls live registry APIs (such as RegSetValue), which are the primary hooks for detecting registry modifications; offreg.dll operates directly on the hive file and is rarely monitored.
+
+The only observable artifact is the creation of NTUSER.MAN in the user’s profile directory, making the persistence stealthy and effective even without administrative privileges.
+
