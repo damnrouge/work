@@ -1,8 +1,21 @@
-The file NTUSER.MAN is a binary registry hive placed in a user's profile folder to exploit Windows mandatory user profiles, causing the system to load it instead of the normal NTUSER.DAT at login.
+- Exported target user's HKCU registry hive using reg export
 
-It is malicious because it was crafted offline using the Offline Registry API (offreg.dll) to embed a persistent Run or RunOnce key that executes an attacker‑controlled command each time the user logs in.
+- Injected a malicious Run key into the exported .reg file
 
-This technique bypasses EDR because it never calls live registry APIs (such as RegSetValue), which are the primary hooks for detecting registry modifications; offreg.dll operates directly on the hive file and is rarely monitored.
+- Used Offline Registry API (offreg.dll) to convert .reg 
+  into a binary hive file named NTUSER.MAN
 
-The only observable artifact is the creation of NTUSER.MAN in the user’s profile directory, making the persistence stealthy and effective even without administrative privileges.
+- Placed NTUSER.MAN in target user's %USERPROFILE% directory
 
+- Windows loaded the malicious hive at next login and 
+  executed the attacker's payload
+
+- No live registry API calls were made — CrowdStrike did 
+  not alert on the registry modification
+
+- Raised a case with CrowdStrike on the offreg.dll 
+  detection gap
+
+- Created a Custom IOA rule to detect NTUSER.MAN 
+  creation in user profile directories as a 
+  compensating control
