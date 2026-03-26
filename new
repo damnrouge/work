@@ -1,8 +1,2 @@
-https://blog.securelayer7.net/cve-2026-24291-regpwn-windows-privilege-escalation/
-
-A local privilege escalation vulnerability in Windows resides in the Windows Accessibility Infrastructure, managed by the Windows Configuration Manager at the kernel level.
-The root cause is an incorrect permission assignment within the Windows Accessibility Infrastructure, specifically involving ATBroker.exe, which manages tools such as the On-Screen Keyboard and Narrator.
-A standard user has write access to the HKCU registry path associated with accessibility configuration. ATBroker.exe copies values from this user-controlled location into HKLM paths that are ordinarily restricted to SYSTEM-level processes only.
-When the workstation is locked and the Secure Desktop is activated, Windows spawns a second instance of ATBroker.exe running under SYSTEM privileges to manage accessibility tools on the secure session.
-An attacker replaces the user-writable accessibility registry key with a registry symbolic link pointing to a privileged target, such as a Windows service's ImagePath value. Because ATBroker.exe running as SYSTEM does not validate whether the destination has been substituted, it transparently follows the link and writes the attacker-controlled value into the privileged location.
-This results in the attacker gaining full NT AUTHORITY\SYSTEM privileges without requiring administrator credentials, UAC elevation, or any kernel exploit.
+Get-ItemProperty "HKLM:\SYSTEM\CrowdStrike\{9b03c1d9-3138-44ed-9fae-d9f4c034b88d}\{16e0423f-7058-48c9-a204-725362b67639}\Default" |
+    Select-Object -Property *
