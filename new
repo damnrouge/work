@@ -279,3 +279,14 @@ int main() {
     InternetCloseHandle(hInternet);
     return 0;
 }
+
+
+
+
+#ifndef CONFIG_H
+#define CONFIG_H
+
+#define BOT_TOKEN "YOUR_BOT_TOKEN_HERE"
+#define OWNER_ID  "YOUR_TELEGRAM_CHAT_ID_HERE"
+
+#endif
