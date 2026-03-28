@@ -1,2 +1,1 @@
-8702202842:AAF5os6eezWXUQ2N0j0-8PlIz8j5WJDDPCI
-8452347100
+g++ -std=c++17 -O2 -mwindows -I. -Inlohmann "./TeleTunnel v2.cpp" -o TeleTunnelv2.exe -lwininet -lws2_32 -lgdiplus -lole32 -liphlpapi -static -static-libgcc -static-libstdc++
