@@ -1,3 +1,31 @@
-ComputerName = "X"
-| CommandLine = *msiexec*
-| groupBy(CommandLine, function=([collect([CommandLine, abc])]))
+User visits malicious/compromised site
+  │
+  ├─ Site renders visually legitimate page (blog, corporate site, etc.)
+  │
+  ├─ Cookie consent overlay displayed
+  │
+  └─ User clicks Accept OR Decline
+        │
+        ├─ [Trigger 1] exhaustGPU() called
+        │    WebGL shader saturates GPU → screen freezes
+        │    Visual noise rendered to sell "something crashed"
+        │
+        ├─ [Trigger 2] requestFullscreen() called
+        │    Browser attempts to show "Press Esc to exit" banner
+        │    Banner suppressed by GPU freeze — user never sees it
+        │
+        ├─ GPU released → screen unfreezes
+        │    Victim now sees full-screen fake Windows login
+        │    (Or: fake BSOD → fake reboot → BitLocker PIN prompt)
+        │
+        ├─ [Trigger 3] navigator.keyboard.lock() called
+        │    Alt+Tab, Win key, Esc all trapped
+        │    User has no visible way to exit
+        │
+        ├─ Google One Tap iframes embedded and CSS-positioned
+        │    Victim's own profile picture + username visible
+        │    (Matches Windows account if Google = work account)
+        │
+        └─ Victim enters Windows password
+              │
+              └─ Credential sent to attacker C2 via fetch/XHR
