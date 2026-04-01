@@ -1,7 +1,1 @@
-The White Knight Labs article Discreet Driver Loading in Windows covers 5 techniques for loading kernel drivers while evading common EDR and SIEM detection rules:
-
-1. System path staging - Dropping the driver under C:\Windows\System32\drivers to bypass path-based IOC rules.
-2. Non-.sys extension loading - Loading a valid driver PE using an alternative file extension (e.g. .exe) to evade extension-keyed detections.
-3. Service type substitution - Using sc.exe with type=filesys instead of type=kernel to avoid rules that key specifically on the kernel service type string.
-4. PE Checksum field mutation - Modifying the PE Checksum header field to alter the raw SHA256 hash while keeping the Authenticode signature valid, defeating hash-based blocklist lookups.
-5. WIN_CERTIFICATE structure manipulation - Mutating excluded fields within the WIN_CERTIFICATE structure to shift the file hash without invalidating the digital signature
+aaa
