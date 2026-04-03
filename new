@@ -1,3 +1,1 @@
-#event_simpleName=RegistryHiveFileWritten
-| TargetFileName = /.*\\Users\\[^\\]+\\NTUSER\.MAN/i
-| table(@timestamp, ComputerName, UserName, TargetFileName, ImageFileName)
+aaaa
