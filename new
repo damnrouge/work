@@ -1,4 +1,9 @@
-aaaa
-bbbb
-
-This line is added!!!
+#event_simpleName=AsepValueUpdate
+| AsepClass=7
+| RegOperationType in (1, 3)
+| RegObjectName=/SYSTEM\\CurrentControlSet\\Services\\/i
+| RegStringValue=/^(1|2|0x0*1|0x0*2)$/ OR RegNumericValue in (1, 2)
+| join({ #event_simpleName=ProcessRollup2 | fields([TargetProcessId, ImageFileName, CommandLine, UserName]) }, field=ContextProcessId, key=TargetProcessId, mode=left)
+| ServiceName := replace(RegObjectName, /.*\\Services\\([^\\]+).*/, "\1")
+| table(@timestamp, ComputerName, ServiceName, RegObjectName, RegValueName, RegNumericValue, RegStringValue, RegOperationType, ImageFileName, CommandLine, UserName, SHA256HashData, aid)
+| sort(@timestamp, order=desc)
